@@ -1,0 +1,34 @@
+type BlockTag = variant {
+  Earliest;
+  Safe;
+  Finalized;
+  Latest;
+  Number : nat;
+  Pending;
+};
+type EcdsaCurve = variant { secp256k1 };
+type EcdsaKeyId = record { name : text; curve : EcdsaCurve };
+type EthMainnetService = variant {
+  Alchemy;
+  BlockPi;
+  Cloudflare;
+  PublicNode;
+  Ankr;
+};
+type EthSepoliaService = variant { Alchemy; BlockPi; PublicNode; Ankr };
+type HttpHeader = record { value : text; name : text };
+type InitArg = record {
+  ecdsa_key_id : EcdsaKeyId;
+  get_logs_topics : opt vec vec text;
+  last_scraped_block_number : nat;
+  rpc_services : RpcServices;
+  block_tag : BlockTag;
+  get_logs_address : vec text;
+};
+type RpcApi = record { url : text; headers : opt vec HttpHeader };
+type RpcServices = variant {
+  EthSepolia : opt vec EthSepoliaService;
+  Custom : record { chainId : nat64; services : vec RpcApi };
+  EthMainnet : opt vec EthMainnetService;
+};
+service : (InitArg) -> { get_evm_address : () -> (text) query }
