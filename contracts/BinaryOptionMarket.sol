@@ -1,20 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./OracleConsumer.sol";
-import "openzeppelin-contracts/contracts/tokens/IERC20.sol";
 
 contract BinaryOptionMarket is Ownable {
-    using SafeMath for uint;
-
     enum Side { Long, Short }
     enum Phase { Bidding, Trading, Maturity, Expiry }
 
     struct OracleDetails {
         bytes32 key;
         uint strikePrice;
-        uint finalPrice;
+        string finalPrice;
     }
 
     struct Position {
@@ -30,80 +27,165 @@ contract BinaryOptionMarket is Ownable {
 
     OracleDetails public oracleDetails;
     OracleConsumer internal priceFeed;
-    IERC20 public sUSD;
     Position public positions;
     MarketFees public fees;
     uint public totalDeposited;
     bool public resolved;
     Phase public currentPhase;
+    uint public feePercentage = 10; // 10% fee on rewards
+    mapping(address => uint) public longBids;
+    mapping(address => uint) public shortBids;
+    mapping(address => bool) public hasClaimed;
 
-    event Bid(Side side, address account, uint value);
-    event MarketResolved(uint finalPrice, uint timeStamp);
-    event Refund(Side side, address account, uint value);
+    event Bid(Side side, address indexed account, uint value);
+    event MarketResolved(string finalPrice, uint timeStamp);
+    event RewardClaimed(address indexed account, uint value);
+    event Withdrawal(address indexed user, uint amount);
 
     constructor(
         address _owner,
         address _coprocessor,
-        address _tokenAddress,
         bytes32 _oracleKey,
         uint _strikePrice,
         uint _poolFee,
         uint _creatorFee,
         uint _refundFee
-    ) Owned(_owner) {
+    ) Ownable(_owner) {
         priceFeed = OracleConsumer(_coprocessor);
-        sUSD = IERC20(_tokenAddress);
-        oracleDetails = OracleDetails(_oracleKey, _strikePrice, 0);
+        oracleDetails = OracleDetails(_oracleKey, _strikePrice, "0");
         fees = MarketFees(_poolFee, _creatorFee, _refundFee);
         currentPhase = Phase.Bidding;
+        transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
     }
 
-    function bid(Side side, uint value) public {
+    function bid(Side side) public payable {
         require(currentPhase == Phase.Bidding, "Not in bidding phase");
-        require(value > 0, "Value must be greater than zero");
-        sUSD.transferFrom(msg.sender, address(this), value);
+        require(msg.value > 0, "Value must be greater than zero");
 
         if (side == Side.Long) {
-            positions.long = positions.long.add(value);
+            positions.long += msg.value;
+            longBids[msg.sender] += msg.value;
         } else {
-            positions.short = positions.short.add(value);
+            positions.short += msg.value;
+            shortBids[msg.sender] += msg.value;
         }
 
-        totalDeposited = totalDeposited.add(value);
-        emit Bid(side, msg.sender, value);
+        totalDeposited += msg.value;
+        emit Bid(side, msg.sender, msg.value);
     }
 
-    function refund(Side side, uint value) public {
-        require(currentPhase == Phase.Bidding, "Refunds only during bidding");
-        require(value > 0, "Value must be greater than zero");
-        uint refundAmount = value.mul(SafeMath.sub(10000, fees.refundFee)).div(10000);
+    function multiBid(Side[] memory sides, uint[] memory values) public payable {
+        require(currentPhase == Phase.Bidding, "Not in bidding phase");
+        require(sides.length == values.length, "Mismatched inputs");
 
-        if (side == Side.Long) {
-            require(positions.long >= value, "Not enough balance to refund");
-            positions.long = positions.long.sub(value);
-        } else {
-            require(positions.short >= value, "Not enough balance to refund");
-            positions.short = positions.short.sub(value);
+        uint totalValue = 0;
+
+        for (uint i = 0; i < sides.length; i++) {
+            totalValue += values[i];
         }
 
-        totalDeposited = totalDeposited.sub(value);
-        sUSD.transfer(msg.sender, refundAmount);
-        emit Refund(side, msg.sender, refundAmount);
+        require(msg.value == totalValue, "Incorrect ETH amount for bids");
+
+        for (uint i = 0; i < sides.length; i++) {
+            if (sides[i] == Side.Long) {
+                positions.long += values[i];
+                longBids[msg.sender] += values[i];
+            } else {
+                positions.short += values[i];
+                shortBids[msg.sender] += values[i];
+            }
+
+            totalDeposited += values[i];
+            emit Bid(sides[i], msg.sender, values[i]);
+        }
     }
 
     function resolveMarket() external onlyOwner {
         require(currentPhase == Phase.Trading, "Market not in trading phase");
         currentPhase = Phase.Maturity;
 
-        (uint price, uint updatedAt) = oraclePriceAndTimestamp();
+        (string memory price, uint updatedAt) = oraclePriceAndTimestamp();
         oracleDetails.finalPrice = price;
         resolved = true;
         emit MarketResolved(price, updatedAt);
     }
 
-    function oraclePriceAndTimestamp() public view returns (uint price, uint updatedAt) {
-        (, int256 answer, , uint timeStamp,) = priceFeed.latestRoundData();
-        price = uint(answer);
+    function claimReward() external {
+        require(currentPhase == Phase.Expiry, "Market not in expiry phase");
+        require(resolved, "Market is not resolved yet");
+        require(!hasClaimed[msg.sender], "Reward already claimed");
+
+        uint finalPrice = parsePrice(oracleDetails.finalPrice);
+
+        Side winningSide;
+        if (finalPrice >= oracleDetails.strikePrice) {
+            winningSide = Side.Long;
+        } else {
+            winningSide = Side.Short;
+        }
+
+        uint userDeposit;
+        uint totalWinningDeposits;
+
+        if (winningSide == Side.Long) {
+            userDeposit = longBids[msg.sender];
+            totalWinningDeposits = positions.long;
+        } else {
+            userDeposit = shortBids[msg.sender];
+            totalWinningDeposits = positions.short;
+        }
+
+        require(userDeposit > 0, "No deposits on winning side");
+
+        uint reward = (userDeposit * totalDeposited) / totalWinningDeposits;
+        uint fee = (reward * feePercentage) / 100;
+        uint finalReward = reward - fee;
+
+        hasClaimed[msg.sender] = true;
+
+        payable(msg.sender).transfer(finalReward);
+        emit RewardClaimed(msg.sender, finalReward);
+    }
+
+    function withdraw() public {
+        uint amount = address(this).balance;
+        require(amount > 0, "No balance to withdraw.");
+
+        payable(msg.sender).transfer(amount);
+
+        emit Withdrawal(msg.sender, amount);
+    }
+
+    function oraclePriceAndTimestamp() public view returns (string memory price, uint updatedAt) {
+        (, string memory answer, uint timeStamp, ) = priceFeed.latestRoundData();
+        price = answer;
         updatedAt = timeStamp;
+    }
+
+    function startTrading() external onlyOwner {
+        require(currentPhase == Phase.Bidding, "Market not in bidding phase");
+        currentPhase = Phase.Trading;
+    }
+
+    function expireMarket() external onlyOwner {
+        require(currentPhase == Phase.Maturity, "Market not in maturity phase");
+        currentPhase = Phase.Expiry;
+    }
+
+    function setFeePercentage(uint _feePercentage) public onlyOwner {
+        require(_feePercentage <= 20, "Fee percentage cannot exceed 20.");
+        feePercentage = _feePercentage;
+    }
+
+    function parsePrice(string memory priceString) internal pure returns (uint) {
+        bytes memory priceBytes = bytes(priceString);
+        uint price = 0;
+
+        for (uint i = 0; i < priceBytes.length; i++) {
+            require(priceBytes[i] >= 0x30 && priceBytes[i] <= 0x39, "Invalid price string");
+            price = price * 10 + (uint(uint8(priceBytes[i])) - 0x30);
+        }
+
+        return price;
     }
 }
