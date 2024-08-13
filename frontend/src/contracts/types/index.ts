@@ -7,6 +7,11 @@ export enum UP_DOWN_TYPE {
   TAIL = 1,
 }
 
+export enum OPTION_SIDE {
+  LONG = 0,
+  SHORT = 1,
+}
+
 export interface IRequestInfo {
   player: string;
   bet: number;

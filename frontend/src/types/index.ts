@@ -1,4 +1,4 @@
-import { UP_DOWN_TYPE } from "../contracts/types";
+import { UP_DOWN_TYPE, OPTION_SIDE } from "../contracts/types";
 
 export interface ILatestRound {
   answer: string;
@@ -22,4 +22,13 @@ export interface IWalletInfo {
 export interface IOptionModel {
   type: UP_DOWN_TYPE;
   amount: number;
+}
+
+export interface IBidOffer {
+  side: OPTION_SIDE;
+  amount: number;
+}
+
+export interface IBidResult {
+  isSuccessful: boolean
 }

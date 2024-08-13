@@ -60,7 +60,7 @@ const WalletInformation = ({ ...props }: IProps) => {
                   variant="with-title"
                   fontSize="10px"
                 >
-                  {numberFormat(point)} ETH                 
+                  {numberFormat(point)} tUSD                 
                 </Text>
               </HStack>
             </HStack>

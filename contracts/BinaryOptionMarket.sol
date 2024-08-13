@@ -9,7 +9,6 @@ contract BinaryOptionMarket is Ownable {
     enum Phase { Bidding, Trading, Maturity, Expiry }
 
     struct OracleDetails {
-        bytes32 key;
         uint strikePrice;
         string finalPrice;
     }
@@ -45,15 +44,10 @@ contract BinaryOptionMarket is Ownable {
     constructor(
         address _owner,
         address _coprocessor,
-        bytes32 _oracleKey,
-        uint _strikePrice,
-        uint _poolFee,
-        uint _creatorFee,
-        uint _refundFee
+        uint _strikePrice
     ) Ownable(_owner) {
         priceFeed = OracleConsumer(_coprocessor);
-        oracleDetails = OracleDetails(_oracleKey, _strikePrice, "0");
-        fees = MarketFees(_poolFee, _creatorFee, _refundFee);
+        oracleDetails = OracleDetails(_strikePrice, "0");
         currentPhase = Phase.Bidding;
         transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
     }

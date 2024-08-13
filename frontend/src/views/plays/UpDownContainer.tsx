@@ -11,6 +11,7 @@ import { useAppDispatch, useAppSelector } from "../../reduxs/hooks";
 import { getToast } from "../../utils";
 import UserList from "./UserList";
 import { UpDownContract } from "../../contracts/UpDownContract";
+import { BinaryOptionMarketContract } from "../../contracts/BinaryOptionMarketContract";
 
 const DEFAULT_SECOND = 30;
 
@@ -50,7 +51,7 @@ export default function UpDownContainer() {
         dispatch(startResultAction(5));
         toast(
           getToast(
-            `You have added 5 ETH. The latest price of ${name} is ${rs.answer}.`,
+            `You have added 5 tUSD. The latest price of ${name} is ${rs.answer}.`,
             "success",
             "Congratulations"
           )
@@ -59,7 +60,7 @@ export default function UpDownContainer() {
         dispatch(startResultAction(-5));
         toast(
           getToast(
-            `Ops, You lost 5 ETH. The latest price of ${name} is ${rs.answer}.`,
+            `Ops, You lost 5 tUSD. The latest price of ${name} is ${rs.answer}.`,
             "warning",
             "Ooh"
           )
@@ -128,6 +129,27 @@ export default function UpDownContainer() {
     }
   }, [countDown, waiting]);
 
+  const handleBidding = async () => {
+    if (headTail === undefined || smAddress === undefined || !web3Provider)
+      return;
+    try {
+      const sm = new BinaryOptionMarketContract(web3Provider, "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0");
+      const rs = await sm.bid(0, "0.05");
+    
+      // dispatch(
+      //   setPickItemAction({
+      //     startAt: new Date(),
+      //     price: rs.answer,
+      //     yourPick: `${
+      //       coinData.find((p) => p.value === smAddress)?.lable || ""
+      //     } (${headTail === UP_DOWN_TYPE.HEAD ? "UP" : "DOWN"})`,
+      //   })
+      // );
+    } catch (er: any) {
+      toast(getToast(er));
+    }
+  }
+
   return (
     <>
       <Flex
@@ -168,19 +190,35 @@ export default function UpDownContainer() {
           </SimpleGrid>
 
           {countDown < 1 && (
-            <OptionButton
-              w="full"
-              text={!walletInfo.address ? "CONNECT YOUR WALLET" : "START NOW"}
-              mt="30px !important"
-              isDisabled={
-                !walletInfo.address ||
-                !smAddress ||
-                headTail === undefined ||
-                countDown > 0
-              }
-              onClick={handleStartNow}
-              isLoading={countDown > 0}
-            />
+            <div>
+              <OptionButton
+                w="full"
+                text={!walletInfo.address ? "CONNECT YOUR WALLET" : `BID 0.05 ETH (don't click)`}
+                bgColor={"orange"}
+                mt="30px !important"
+                isDisabled={
+                  !walletInfo.address ||
+                  !smAddress ||
+                  headTail === undefined ||
+                  countDown > 0
+                }
+                onClick={handleBidding}
+                isLoading={countDown > 0}
+              />
+              <OptionButton
+                w="full"
+                text={!walletInfo.address ? "CONNECT YOUR WALLET" : "START NOW"}
+                mt="30px !important"
+                isDisabled={
+                  !walletInfo.address ||
+                  !smAddress ||
+                  headTail === undefined ||
+                  countDown > 0
+                }
+                onClick={handleStartNow}
+                isLoading={countDown > 0}
+              />
+            </div>
           )}
           <Flex mt="80px" mb="20px" />
           {countDown && (
