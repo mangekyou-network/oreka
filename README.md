@@ -24,15 +24,6 @@ Ensure Docker and VS Code are installed and running, then click the button below
 
 [![Open locally in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/letmejustputthishere/chain-fusion-starter)
 
-### Manual Setup
-
-Ensure the following are installed on your system:
-
--   [Node.js](https://nodejs.org/en/) `>= 21`
--   [Foundry](https://github.com/foundry-rs/foundry)
--   [Caddy](https://caddyserver.com/docs/install#install)
--   [DFX](https://internetcomputer.org/docs/current/developer-docs/build/install-upgrade-remove) `>= 0.18`
-
 Run these commands in a new, empty project directory:
 
 ```sh
