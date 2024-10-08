@@ -61,6 +61,7 @@ impl TryFrom<InitArg> for State {
             evm_address: None,
             nonce: U256::zero(),
             block_tag,
+            latest_price: None,
         };
         Ok(state)
     }

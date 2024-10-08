@@ -4,6 +4,7 @@ mod lifecycle;
 mod logs;
 mod state;
 mod xrc;
+mod price_feed;
 // uncomment to enable serving stored assets via http requests
 // mod storage;
 
@@ -15,6 +16,10 @@ use lifecycle::InitArg;
 use state::{read_state, State};
 
 use crate::state::{initialize_state, mutate_state};
+
+use price_feed::setup_price_feed_timer;
+
+use candid::{Principal, Nat};
 
 pub const SCRAPING_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
 
@@ -41,6 +46,25 @@ fn setup_timers() {
 fn init(arg: InitArg) {
     initialize_state(state::State::try_from(arg).expect("BUG: failed to initialize canister"));
     setup_timers();
+}
+
+#[ic_cdk::query]
+fn get_latest_price() -> Option<f64> {
+    price_feed::get_latest_price()
+}
+
+#[ic_cdk::update]
+async fn top_up_cycles() {
+    let amount = 1_000_000_000_000; // 1T cycles
+    let (refund,): (Nat,) = ic_cdk::api::call::call_with_payment(
+        Principal::from_text("aaaaa-aa").unwrap(), // canister mint cycles
+        "mint_cycles",
+        (),
+        amount,
+    )
+    .await
+    .expect("Failed to top-up cycles");
+    ic_cdk::println!("Topped up {} cycles", amount - refund);
 }
 
 #[ic_cdk::query]
