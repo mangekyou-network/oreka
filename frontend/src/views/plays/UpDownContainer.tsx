@@ -88,9 +88,8 @@ export default function UpDownContainer() {
         setPickItemAction({
           startAt: new Date(),
           price: rs.answer,
-          yourPick: `${
-            coinData.find((p) => p.value === smAddress)?.lable || ""
-          } (${headTail === UP_DOWN_TYPE.HEAD ? "UP" : "DOWN"})`,
+          yourPick: `${coinData.find((p) => p.value === smAddress)?.lable || ""
+            } (${headTail === UP_DOWN_TYPE.HEAD ? "UP" : "DOWN"})`,
         })
       );
     } catch (er: any) {
@@ -103,10 +102,10 @@ export default function UpDownContainer() {
       return;
     }
 
-    
-    coinData.push({ 
-      value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", 
-      lable: "WIF/USD" 
+
+    coinData.push({
+      value: "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      lable: "WIF/USD"
     });
   });
 
@@ -135,7 +134,7 @@ export default function UpDownContainer() {
     try {
       const sm = new BinaryOptionMarketContract(web3Provider, "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0");
       const rs = await sm.bid(0, "0.05");
-    
+
       // dispatch(
       //   setPickItemAction({
       //     startAt: new Date(),
@@ -193,7 +192,7 @@ export default function UpDownContainer() {
             <div>
               <OptionButton
                 w="full"
-                text={!walletInfo.address ? "CONNECT YOUR WALLET" : `BID 0.05 ETH (don't click)`}
+                text={!walletInfo.address ? "CONNECT YOUR WALLET" : `BID 0.05 ETH`}
                 bgColor={"orange"}
                 mt="30px !important"
                 isDisabled={
