@@ -38,12 +38,15 @@ function Dropdown({
 }: IProps) {
   const { onOpen, onClose, isOpen } = useDisclosure();
 
+  // Modified getText to show name and label if available
   const getText = useMemo(() => {
     const item = data.find((p) => p.value === selectedValue);
     if (!item) return placeholder;
-    return item.lable;
-  }, [selectedValue]);
+    // Show name if it exists, otherwise just label
+    return item.name ? `${item.name}: ${item.label}` : item.label; 
+  }, [selectedValue, data, placeholder]);
 
+  // Set color based on whether the placeholder is displayed or not
   const color = getText === placeholder ? "#6a5809" : "#000";
 
   return (
@@ -56,9 +59,13 @@ function Dropdown({
       <PopoverTrigger>
         <Button variant={"primary"} w="full">
           <VStack>
-            <Text color={color}>{getText}</Text>
+            {/* Centering and displaying the selected text */}
+            <Text color={color} textAlign="center" width="100%">
+              {getText}
+            </Text>
+            {/* Displaying the price if available */}
             {price !== undefined && (
-              <Text color="#6a5809" fontSize="8px">
+              <Text color="#6a5809" fontSize="8px" textAlign="center">
                 Price: {numberFormat(price || 0)}
               </Text>
             )}
@@ -72,6 +79,7 @@ function Dropdown({
         w="420px"
       >
         <PopoverBody p={0}>
+          {/* Mapping through each dropdown item */}
           {data.map((drop) => (
             <Stack
               my="5px"
@@ -79,7 +87,7 @@ function Dropdown({
               key={drop.value}
               onClick={() => {
                 onSelectItem && onSelectItem(drop);
-                onClose();
+                onClose(); // Close the dropdown after selection
               }}
             >
               <Flex
@@ -89,8 +97,15 @@ function Dropdown({
                 _hover={{ bgColor: "#fedf56", border: "1px solid #fff" }}
                 px="15px"
               >
-                <Text variant="notoSan" color="#6f632a" fontSize="16px">
-                  {drop.lable}
+                {/* Displaying the name and label, or just label if name is not available */}
+                <Text
+                  variant="notoSan"
+                  color="#6f632a"
+                  fontSize="16px"
+                  width="100%"
+                  textAlign="center"
+                >
+                  {drop.name ? `${drop.name}: ${drop.label}` : drop.label}
                 </Text>
               </Flex>
             </Stack>
