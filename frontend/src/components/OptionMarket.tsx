@@ -9,6 +9,7 @@ import { useAppSelector } from "../reduxs/hooks";
 import ContractBalance from './Contractbalance';
 import { SMART_CONTRACT_ADDRESS } from '../configs/constants';
 import BinaryOptionMarketABI from '../contracts/abis/BinaryOptionMarketABI.json';
+import { title } from 'process';
 
 function OptionMarket() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -20,7 +21,7 @@ function OptionMarket() {
   const [bidAmount, setBidAmount] = useState("");
   const [coinData, setCoinData] = useState([]);
   const [smAddress, setSmAddress] = useState<string>("");
-  const [contract, setContract] = useState<any>(null);
+  const [contract, setContract] = useState<any>(true);
   const [web3Provider, setWeb3Provider] = useState<ethers.providers.Web3Provider | null>(null);
   const toast = useToast();
   const { walletInfo } = useAppSelector((state) => state.account);
@@ -124,6 +125,7 @@ function OptionMarket() {
   // Owner functions
   const handleStartTrading = async () => {
     if (contract) {
+      console.log("Contract is initialized:", contract);
       try {
         await contract.startTrading();
         toast({
@@ -133,6 +135,7 @@ function OptionMarket() {
           isClosable: true,
         });
       } catch (error) {
+        console.error("Error starting trading:", error);
         toast({
           title: "Error",
           description: "Failed to start trading. Please try again.",
@@ -141,8 +144,11 @@ function OptionMarket() {
           isClosable: true,
         });
       }
+    } else {
+      console.error("Contract is not initialized");
     }
   };
+  
 
   const handleResolve = async () => {
     if (contract) {
@@ -190,6 +196,16 @@ function OptionMarket() {
 
   const [randomNumber, setRandomNumber] = useState(0);
   const handleClick = async() => {
+    if (!bidAmount || Number(bidAmount) <= 0) {
+      toast({
+        title: "Invalid Bid",
+        description: "Please enter a valid bid amount.",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
     const randomNum = Math.floor(Math.random()*2); 
     setRandomNumber(randomNum); 
     if (randomNum === UP_DOWN_TYPE.HEAD) {
@@ -197,12 +213,16 @@ function OptionMarket() {
     } else {
       setIsWin(false);
     }
+    setBidAmount("");
     setIsModalVisible(true);
+    
   }
 
   const handleCloseModal = () => {
     setIsModalVisible(false);
   };
+
+  
 
   return (
     <Flex justifyContent="center" alignItems="center" >
@@ -268,6 +288,7 @@ function OptionMarket() {
                 _focus={{ boxShadow: 'none' }}
                 _hover={{ backgroundColor: "#EAEAEA" }}
                 padding="0"
+                
               />
             </Box>
 
@@ -288,7 +309,14 @@ function OptionMarket() {
             <Input
               placeholder="Enter bid amount in ETH"
               value={bidAmount}
-              onChange={(e) => setBidAmount(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                // Kiểm tra nếu giá trị nhập vào là số hoặc chuỗi rỗng
+                if (!isNaN(Number(value)) || value === "") {
+                  setBidAmount(value);
+                }
+              }}
+              inputMode="numeric"
               bg="#FEDF56" 
               color="#5D3A1A" 
               border="1px solid #000000"
@@ -315,6 +343,8 @@ function OptionMarket() {
                 _hover={{ backgroundColor: "#28A745" }}
                 pointerEvents="auto"
                 onClick={() => handleClick(UP_DOWN_TYPE.HEAD)}
+                isDisabled={!bidAmount || Number(bidAmount) <= 0 || !smAddress} // Disable button if no valid bidAmount
+
               >
                 Up
               </Button>
@@ -328,6 +358,8 @@ function OptionMarket() {
                 _hover={{ backgroundColor: "#DC3545" }}
                 pointerEvents="auto"
                 onClick={() => handleClick(UP_DOWN_TYPE.TAIL)}
+                isDisabled={!bidAmount || Number(bidAmount) <= 0 || !smAddress} // Disable button if no valid bidAmount
+
               >
                 Down
               </Button>
@@ -353,11 +385,12 @@ function OptionMarket() {
               bg="white"
               borderRadius="10px"
               textAlign="center"
+              color={isWin ? "green.500" : "red.500"}
             >
-              <Text fontSize="2xl" fontWeight="bold">
+              <Text fontSize="4xl" fontWeight="bold">
                 {isWin ? "YOU WIN!" : "YOU LOSE!"}
               </Text>
-              <Button mt={4} onClick={handleCloseModal}>Đóng</Button>
+              <Button mt={4} onClick={handleCloseModal} style={{ color: "red" }} >Đóng</Button>
             </Box>
           </Box>
         )}
@@ -380,6 +413,7 @@ function OptionMarket() {
         {/* Default Interface */}
         {!isLoggedIn && (
           <Button 
+            
             onClick={connectWallet} 
             backgroundColor="#EAEAEA"
             color="#5D3A1A"
@@ -390,6 +424,7 @@ function OptionMarket() {
             fontWeight="bold"
             w="full"
             backgroundColor="#FEDF56"
+            
           >
             Login
           </Button>

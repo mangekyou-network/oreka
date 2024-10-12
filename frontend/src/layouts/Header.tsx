@@ -43,6 +43,21 @@ function Header() {
 
       {walletAddress && ( 
         <HStack spacing="20px" mt="30px" align="center">
+
+          <Flex
+            align="center"
+            p={40}
+            bg="#000000"
+            borderRadius="full"
+            boxShadow="lg"
+            pl={3}
+          >
+            <MdOutlineAccountBalanceWallet size={24} color="#FEDF56" />
+            <Text ml={2} fontSize="md" color="#FEDF56">
+              {balance} ETH
+            </Text>
+          </Flex>
+
           <Flex
             align="center"
             p={2}
@@ -57,19 +72,7 @@ function Header() {
             </Text>
           </Flex>
 
-          <Flex
-            align="center"
-            p={2}
-            bg="#000000"
-            borderRadius="full"
-            boxShadow="lg"
-            pl={3}
-          >
-            <MdOutlineAccountBalanceWallet size={24} color="#FEDF56" />
-            <Text ml={2} fontSize="md" color="#FEDF56">
-              {balance} ETH
-            </Text>
-          </Flex>
+          
         </HStack>
       )}
     </Flex>
