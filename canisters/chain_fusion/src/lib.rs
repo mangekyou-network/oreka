@@ -46,6 +46,7 @@ fn setup_timers() {
 fn init(arg: InitArg) {
     initialize_state(state::State::try_from(arg).expect("BUG: failed to initialize canister"));
     setup_timers();
+    setup_price_feed_timer();  
 }
 
 #[ic_cdk::query]
