@@ -47,7 +47,7 @@ function Dropdown({
   }, [selectedValue, data, placeholder]);
 
   // Set color based on whether the placeholder is displayed or not
-  const color = getText === placeholder ? "#6a5809" : "#000";
+  const color = getText === placeholder ? "#FEDF56" : "#FEDF56";
 
   return (
     <Popover
@@ -57,7 +57,14 @@ function Dropdown({
       closeOnBlur={false}
     >
       <PopoverTrigger>
-        <Button variant={"primary"} w="full">
+        <Button
+          variant="unstyled" // Đặt thành unstyled để loại bỏ nền và viền mặc định
+          w="full"
+          bg="transparent" // Đảm bảo nền trong suốt
+          _hover={{ backgroundColor: "transparent" }} // Loại bỏ hiệu ứng hover
+          _focus={{ boxShadow: "none" }} // Loại bỏ hiệu ứng focus
+          padding={0} // Bỏ padding nếu có
+        >
           <VStack>
             {/* Centering and displaying the selected text */}
             <Text color={color} textAlign="center" width="100%">
@@ -73,10 +80,11 @@ function Dropdown({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        border="none"
-        boxShadow="0px 4px 4px rgba(0, 0, 0, 0.25)"
+        border="none" // Loại bỏ viền của PopoverContent
+        boxShadow="0px 4px 4px rgba(0, 0, 0, 0.25)" // Loại bỏ shadow
         padding={0}
         w="420px"
+        // bg="transparent" // Đặt nền trong suốt cho PopoverContent
       >
         <PopoverBody p={0}>
           {/* Mapping through each dropdown item */}
@@ -94,7 +102,7 @@ function Dropdown({
                 py={2}
                 align={"center"}
                 w="full"
-                _hover={{ bgColor: "#fedf56", border: "1px solid #fff" }}
+                _hover={{ border: "1px solid #fff" }}
                 px="15px"
               >
                 {/* Displaying the name and label, or just label if name is not available */}

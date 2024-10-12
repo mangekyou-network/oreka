@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Flex, Box, Text, Button, HStack } from "@chakra-ui/react";
 import { connectToMetaMask, fetchBalance } from "../utils/WalletService";
 import { SMART_CONTRACT_ADDRESS } from "../configs/constants";
-import { MdOutlineAccountBalanceWallet } from "react-icons/md"; // Import icon từ react-icons
+import { MdOutlineAccountBalanceWallet } from "react-icons/md";
 
 function Header() {
   const [walletAddress, setWalletAddress] = useState(""); 
@@ -26,21 +26,23 @@ function Header() {
       justifyContent="center"
       alignItems="center"
       direction="column"
-      mt={2}
+      mt={-40}
     >
-      <Button
-        onClick={handleConnect}
-        bg="#FFA500"
-        color="#000000"
-        _hover={{ bg: "#FF8C00" }}
-        mt={2}
-        mb={3}
-      >
-        Connect MetaMask
-      </Button>
+      {!walletAddress && ( // Chỉ hiển thị nút nếu chưa kết nối ví
+        <Button
+          onClick={handleConnect}
+          bg="#FFA500"
+          color="#000000"
+          _hover={{ bg: "#FF8C00" }}
+          mt={200}
+          mb={3}
+        >
+          Connect MetaMask
+        </Button>
+      )}
 
-      <HStack spacing={3} mt={2} align="center"> 
-        {walletAddress && (
+      {walletAddress && ( 
+        <HStack spacing="20px" mt="30px" align="center">
           <Flex
             align="center"
             p={2}
@@ -49,14 +51,12 @@ function Header() {
             boxShadow="lg"
             pl={3}
           >
-            <MdOutlineAccountBalanceWallet size={24} color="#FFFFFF" /> {/* Sử dụng icon từ react-icons */}
-            <Text ml={2} fontSize="md" color="#FFFFFF">
+            <MdOutlineAccountBalanceWallet size={24} color="#FEDF56" />
+            <Text ml={2} fontSize="md" color="#FEDF56">
               {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
             </Text>
           </Flex>
-        )}
 
-        {walletAddress && (
           <Flex
             align="center"
             p={2}
@@ -65,13 +65,13 @@ function Header() {
             boxShadow="lg"
             pl={3}
           >
-            <MdOutlineAccountBalanceWallet size={24} color="#FFFFFF" />
-            <Text ml={2} fontSize="md" color="#FFFFFF">
+            <MdOutlineAccountBalanceWallet size={24} color="#FEDF56" />
+            <Text ml={2} fontSize="md" color="#FEDF56">
               {balance} ETH
             </Text>
           </Flex>
-        )}
-      </HStack>
+        </HStack>
+      )}
     </Flex>
   );
 }

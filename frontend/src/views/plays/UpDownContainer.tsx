@@ -1,16 +1,16 @@
-import { Flex, SimpleGrid, useToast, VStack, Input, Box } from "@chakra-ui/react";
+// import { Flex, SimpleGrid, useToast, VStack, Input, Box } from "@chakra-ui/react";
 import React, { useCallback, useEffect, useState } from "react";
-import { OptionButton } from "../../components";
-import Dropdown from "../../components/Dropdown";
-import { UP_DOWN_TYPE } from "../../contracts/types";
-import { setPickItemAction, startResultAction } from "../../reduxs/accounts/account.actions";
-import { useAppDispatch, useAppSelector } from "../../reduxs/hooks";
-import { getToast } from "../../utils";
-import UserList from "./UserList";
-import { UpDownContract } from "../../contracts/UpDownContract";
-import { BinaryOptionMarketContract } from "../../contracts/BinaryOptionMarketContract";
-import { ethers } from "ethers";
-import { SMART_CONTRACT_ADDRESS } from '../../configs/constants';
+// import { OptionButton } from "../../components";
+// import Dropdown from "../../components/Dropdown";
+// import { UP_DOWN_TYPE } from "../../contracts/types";
+// import { setPickItemAction, startResultAction } from "../../reduxs/accounts/account.actions";
+// import { useAppDispatch, useAppSelector } from "../../reduxs/hooks";
+// import { getToast } from "../../utils";
+// import UserList from "./UserList";
+// import { UpDownContract } from "../../contracts/UpDownContract";
+// import { BinaryOptionMarketContract } from "../../contracts/BinaryOptionMarketContract";
+// import { ethers } from "ethers";
+// import { SMART_CONTRACT_ADDRESS } from '../../configs/constants';
 import OptionMarket from "../../components/OptionMarket";
 
 const DEFAULT_SECOND = 30;

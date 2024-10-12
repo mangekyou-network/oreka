@@ -113,6 +113,9 @@ function OptionMarket() {
     }
   };
 
+  const [isModalVisible, setIsModalVisible] = useState(false); // Trạng thái hiển thị thông báo
+  const [isWin, setIsWin] = useState(false);
+
   // Function to handle coin selection from the dropdown
   const handleSelectCoin = (selected: { value: string }) => {
     setSmAddress(selected.value);
@@ -185,25 +188,40 @@ function OptionMarket() {
     }
   };
 
+  const [randomNumber, setRandomNumber] = useState(0);
+  const handleClick = async() => {
+    const randomNum = Math.floor(Math.random()*2); 
+    setRandomNumber(randomNum); 
+    if (randomNum === UP_DOWN_TYPE.HEAD) {
+      setIsWin(true);
+    } else {
+      setIsWin(false);
+    }
+    setIsModalVisible(true);
+  }
+
+  const handleCloseModal = () => {
+    setIsModalVisible(false);
+  };
+
   return (
     <Flex justifyContent="center" alignItems="center" >
       <Box
         width={{ base: '90%', md: '700px' }}
         padding="20px"
-        border="2px solid #FEDF56"
         borderRadius="10px"
-        backgroundColor="#1a1a1a"
         textAlign="center"
         color="#FEDF56"
         fontFamily="Arial, sans-serif"
         maxHeight="80vh"
         overflow="auto"
+        mt="-40"
       >
         {/* Owner Interface */}
         {isLoggedIn && userRole === 'owner' && (
           <VStack spacing={4}>
-            <Text fontSize="lg" fontWeight="bold">Owner Dashboard</Text>
-            <SimpleGrid columns={3} spacing={4}>
+            <Text >Owner Dashboard</Text>
+            <SimpleGrid columns={3} spacing={8}>
               <OptionButton text="Start Trading" onClick={handleStartTrading} />
               <OptionButton text="Resolve" onClick={handleResolve} />
               <OptionButton text="Expire" onClick={handleExpire} />
@@ -213,91 +231,149 @@ function OptionMarket() {
 
         {/* Customer Interface */}
         {isLoggedIn && userRole === 'customer' && (
+          
+          // <Text fontSize="lg" fontWeight="bold">Customer Dashboard</Text>
+          //   <Text fontSize="sm">{Rewards Won: ${rewardsWon} ETH}</Text>
+          //   <Button 
+          //     onClick={handleClaimReward} 
+          //     backgroundColor="#FEDF56"
+          //     color="#000000"
+          //     _hover={{ backgroundColor: "#FFD700" }}
+          //     padding="8px"
+          //     borderRadius="5px"
+          //     fontWeight="bold"
+          //     w="120px"
+          //   >
+          //     Get Rewards
+          //   </Button>
+          //   {rewardClaimed && <Text color="green">Reward has been claimed!</Text>}
+
           <VStack spacing={4}>
-            <Text fontSize="lg" fontWeight="bold">Customer Dashboard</Text>
-            <Text fontSize="sm">{`Rewards Won: ${rewardsWon} ETH`}</Text>
-            <Button 
-              onClick={handleClaimReward} 
-              backgroundColor="#FEDF56"
-              color="#000000"
-              _hover={{ backgroundColor: "#FFD700" }}
-              padding="8px"
-              borderRadius="5px"
-              fontWeight="bold"
-              w="120px"
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              width="100%"
+              maxWidth="300px" 
+              margin="0 auto" 
             >
-              Get Rewards
-            </Button>
-            {rewardClaimed && <Text color="green">Reward has been claimed!</Text>}
-            
-            <Dropdown
-              data={coinData}
-              placeholder={"Select one coin"}
-              selectedValue={smAddress}
-              onSelectItem={handleSelectCoin}
-              w="full"
-            />
-
-            <SimpleGrid columns={2} spacingX="10px" w="full" mt="20px">
-              <OptionButton
-                text="UP"
-                w="full"
-                isDisabled={headTail !== UP_DOWN_TYPE.HEAD}
-                onClick={() => setHeadTail(UP_DOWN_TYPE.HEAD)}
-              />
-              <OptionButton
-                text="DOWN"
-                w="full"
-                isDisabled={headTail !== UP_DOWN_TYPE.TAIL}
-                onClick={() => setHeadTail(UP_DOWN_TYPE.TAIL)}
-              />
-            </SimpleGrid>
-
-            <Box w="full" mt="10px">
-              <Input
-                placeholder="Enter bid amount in ETH"
-                value={bidAmount}
-                onChange={(e) => setBidAmount(e.target.value)}
-                border="2px solid #FEDF56"
-                borderRadius="8px"
-                backgroundColor="#FEDF56"
-                color="#000000"
-                fontSize="16px"
-                textAlign="center"
-                padding="8px"
-                _placeholder={{ color: "#000000" }}
-                fontWeight="bold"
+              <Dropdown
+                data={coinData}
+                placeholder={"Select Coin"}
+                selectedValue={smAddress}
+                onSelectItem={handleSelectCoin}
+                width="100%"
+                backgroundColor="transparent"
+                border="none"
+                _focus={{ boxShadow: 'none' }}
+                _hover={{ backgroundColor: "#EAEAEA" }}
+                padding="0"
               />
             </Box>
 
-            {countDown < 1 && (
-              <OptionButton
-                w="full"
-                text="START NOW"
-                mt="10px"
-                isDisabled={
-                  !walletInfo?.address ||
-                  !smAddress ||
-                  headTail === undefined ||
-                  countDown > 0
-                }
-                onClick={handleStartTrading}
-                isLoading={countDown > 0}
-              />
-            )}
-            {countDown > 0 && (
-              <OptionButton
-                text={`${countDown}`}
-                isDisabled={false}
-                w="full"
-                h="50px"
-                fontSize="20px"
-                bgColor="transparent"
-                borderWidth="2px"
-                borderRadius="8px"
-                color="#FEDF56"
-              />
-            )}
+            <Box display="flex"
+              alignItems="center"
+              justifyContent="center"
+              width="700px" 
+              height="200px" 
+              border="2px solid #FEDF56"
+              borderRadius="400px"
+              // backgroundColor="#FEDF56" 
+              color="#FEDF56" 
+              fontSize="4xl" 
+              fontWeight="bold">
+              <Text fontSize="7xl" fontWeight="bold" color="#FEDF56" >{randomNumber}</Text>
+            </Box>
+
+            <Input
+              placeholder="Enter bid amount in ETH"
+              value={bidAmount}
+              onChange={(e) => setBidAmount(e.target.value)}
+              bg="#FEDF56" 
+              color="#5D3A1A" 
+              border="1px solid #000000"
+              borderRadius="full"
+              width="100%"
+              height="50px"
+              textAlign="center"
+              mb={3}
+              _placeholder={{ color: "#5D3A1A", fontSize: "xl" }} 
+              fontWeight="bold"
+            />
+
+              
+           
+
+            <Flex justify="center" mt={2} mb={2} gap="10px"> 
+              <Button
+                bg="#FFD700"
+                color="#5D3A1A"
+                borderRadius="full"
+                width="320px" 
+                height="60px"
+                backgroundColor="#FEDF56"
+                _hover={{ backgroundColor: "#28A745" }}
+                pointerEvents="auto"
+                onClick={() => handleClick(UP_DOWN_TYPE.HEAD)}
+              >
+                Up
+              </Button>
+              <Button
+                bg="#FFD700"
+                color="#5D3A1A"
+                borderRadius="full"
+                width="320px" 
+                height="60px"
+                backgroundColor="#FEDF56"
+                _hover={{ backgroundColor: "#DC3545" }}
+                pointerEvents="auto"
+                onClick={() => handleClick(UP_DOWN_TYPE.TAIL)}
+              >
+                Down
+              </Button>
+            </Flex>
+
+            {/* Modal thông báo */}
+        {isModalVisible && (
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            width="100%"
+            height="100%"
+            bg="rgba(0, 0, 0, 0.5)" 
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            zIndex="999"
+          >
+            <Box
+              width="400px"
+              padding="20px"
+              bg="white"
+              borderRadius="10px"
+              textAlign="center"
+            >
+              <Text fontSize="2xl" fontWeight="bold">
+                {isWin ? "YOU WIN!" : "YOU LOSE!"}
+              </Text>
+              <Button mt={4} onClick={handleCloseModal}>Đóng</Button>
+            </Box>
+          </Box>
+        )}
+
+            {/* <Button 
+              bg="transparent"
+              border="1px solid #000000"
+              borderRadius="full"
+              width="100px"
+              mt={3}
+              color="#5D3A1A"
+              backgroundColor="#FEDF56"
+              _hover={{ backgroundColor: "transparent" }}
+            >
+              Play
+            </Button> */}
           </VStack>
         )}
 
@@ -305,18 +381,20 @@ function OptionMarket() {
         {!isLoggedIn && (
           <Button 
             onClick={connectWallet} 
-            backgroundColor="#FFA500"
-            color="#000000"
-            _hover={{ backgroundColor: "#FF8C00" }}
+            backgroundColor="#EAEAEA"
+            color="#5D3A1A"
+            _hover={{ backgroundColor: "#D5D5D5" }}
             marginTop="15px"
             padding="10px"
-            borderRadius="5px"
+            borderRadius="full"
             fontWeight="bold"
             w="full"
+            backgroundColor="#FEDF56"
           >
             Login
           </Button>
         )}
+
       </Box>
     </Flex>
   );
