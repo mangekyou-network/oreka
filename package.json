@@ -8,19 +8,13 @@
     "react": "^18.3.1"
   },
   "devDependencies": {
-<<<<<<< HEAD
-    "@types/react": "17.0.39",
-    "@types/react-dom": "18.0.3"
-  }
-=======
-    "@types/node": "17.0.31",
     "@types/react": "17.0.39",
     "@types/react-dom": "18.0.3",
+    "@types/node": "17.0.31",
     "eslint": "8.15.0",
     "eslint-config-next": "12.1.6",
     "typescript": "4.6.4"
   },
   "packageManager": "yarn@1.22.21+sha1.1959a18351b811cdeedbd484a8f86c3cc3bbaf72",
   "package-name": "^1.0.0"
->>>>>>> 00faf9d (Update them khi an nut up down se tu dong random va hien thi thong bao thang thua)
 }
