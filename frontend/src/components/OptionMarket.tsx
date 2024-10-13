@@ -10,6 +10,7 @@ import ContractBalance from './Contractbalance';
 import { SMART_CONTRACT_ADDRESS } from '../configs/constants';
 import BinaryOptionMarketABI from '../contracts/abis/BinaryOptionMarketABI.json';
 import { title } from 'process';
+import Header from '../layouts/Header';
 
 function OptionMarket() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -26,6 +27,9 @@ function OptionMarket() {
   const toast = useToast();
   const { walletInfo } = useAppSelector((state) => state.account);
 
+  const [connectedAccount, setConnectedAccount] = useState<string | null>(null);
+  const [walletAddress, setWalletAddress] = useState<string>("");
+
   // Fetch coin data on component mount
   useEffect(() => {
     const fetchCoinData = async () => {
@@ -40,18 +44,7 @@ function OptionMarket() {
     fetchCoinData();
   }, []);
 
-  // Initialize contract when web3Provider and smAddress are set
-  useEffect(() => {
-    if (web3Provider && smAddress) {
-      try {
-        const signer = web3Provider.getSigner();
-        const newContract = new ethers.Contract(smAddress, BinaryOptionMarketABI, signer);
-        setContract(newContract);
-      } catch (error) {
-        console.error("Error initializing contract:", error);
-      }
-    }
-  }, [web3Provider, smAddress]);
+ 
 
   // Wallet connection logic
   const connectWallet = async () => {
@@ -60,11 +53,27 @@ function OptionMarket() {
         const provider = new ethers.providers.Web3Provider(window.ethereum);
         const accounts = await provider.send("eth_requestAccounts", []);
         const userAddress = accounts[0];
+        setWalletAddress(userAddress); // Cập nhật địa chỉ ví sau khi kết nối
         setWeb3Provider(provider);
         checkUserRole(userAddress);
         setIsLoggedIn(true);
+
+        toast({
+          title: "Wallet connected successfully!",
+          description: `Connected account: ${userAddress}`,
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
       } catch (error) {
         console.error("Error connecting to MetaMask:", error);
+        toast({
+          title: "Error",
+          description: "Failed to connect MetaMask. Please try again.",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
       }
     } else {
       console.error("MetaMask is not installed. Please install MetaMask to use this feature.");
@@ -80,6 +89,20 @@ function OptionMarket() {
       setUserRole('customer');
     }
   };
+
+
+   // Initialize contract when web3Provider and smAddress are set
+   useEffect(() => {
+    if (web3Provider && smAddress) {
+      try {
+        const signer = web3Provider.getSigner();
+        const newContract = new ethers.Contract(smAddress, BinaryOptionMarketABI, signer);
+        setContract(newContract);
+      } catch (error) {
+        console.error("Error initializing contract:", error);
+      }
+    }
+  }, [web3Provider, smAddress]);
 
   // Function to claim rewards
   const handleClaimReward = async () => {
@@ -222,10 +245,29 @@ function OptionMarket() {
     setIsModalVisible(false);
   };
 
+  const handleLogin = () => {
+    if (!connectedAccount) {
+      toast({
+        title: "Please connect MetaMask first",
+        status: "warning",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+    // Logic xử lý sau khi đã kết nối MetaMask
+    console.log("Logged in successfully!");
+  };
+
   
 
   return (
+    
     <Flex justifyContent="center" alignItems="center" >
+
+        <Header walletAddress={walletAddress} />
+
+
       <Box
         width={{ base: '90%', md: '700px' }}
         padding="20px"
@@ -237,6 +279,8 @@ function OptionMarket() {
         overflow="auto"
         mt="-40"
       >
+      
+     
         {/* Owner Interface */}
         {isLoggedIn && userRole === 'owner' && (
           <VStack spacing={4}>
@@ -412,6 +456,7 @@ function OptionMarket() {
 
         {/* Default Interface */}
         {!isLoggedIn && (
+          
           <Button 
             
             onClick={connectWallet} 
@@ -426,7 +471,8 @@ function OptionMarket() {
             backgroundColor="#FEDF56"
             
           >
-            Login
+
+            Login / Connect MetaMask
           </Button>
         )}
 
