@@ -1,13 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Flex, Text, HStack, Box } from "@chakra-ui/react";
+import { Flex, Text, HStack } from "@chakra-ui/react";
 import { MdOutlineAccountBalanceWallet } from "react-icons/md";
 import { ethers } from "ethers";
 
-interface HeaderProps {
-  walletAddress: string;
-}
-
-const Header: React.FC<HeaderProps> = ({ walletAddress }) => {
+function Header({ walletAddress }: { walletAddress: string }) {
   const [balance, setBalance] = useState("0"); // Số dư của ví
 
   // Hàm để lấy số dư của địa chỉ ví
@@ -20,8 +16,6 @@ const Header: React.FC<HeaderProps> = ({ walletAddress }) => {
       } catch (error) {
         console.error("Error fetching balance:", error);
       }
-    } else {
-      console.error("MetaMask is not installed or accessible.");
     }
   };
 
@@ -38,30 +32,41 @@ const Header: React.FC<HeaderProps> = ({ walletAddress }) => {
       justifyContent="center"
       alignItems="center"
       direction="column"
-      mb={4}
     >
       {/* Hiển thị số dư và địa chỉ ví nếu đã kết nối */}
       {walletAddress && (
-        <HStack spacing="20px" align="center">
-          {/* Hiển thị số dư */}
-          <Box display="flex" alignItems="center" bg="#000000" p={2} borderRadius="full" boxShadow="lg">
+        <HStack spacing="20px" mt="30px" align="center">
+          <Flex
+            align="center"
+            p={2}
+            bg="#000000"
+            borderRadius="full"
+            boxShadow="lg"
+            pl={3}
+          >
             <MdOutlineAccountBalanceWallet size={24} color="#FEDF56" />
             <Text ml={2} fontSize="md" color="#FEDF56">
-              {Number(balance).toFixed(4)} ETH
+              {balance} ETH
             </Text>
-          </Box>
+          </Flex>
 
-          {/* Hiển thị địa chỉ ví */}
-          <Box display="flex" alignItems="center" bg="#000000" p={2} borderRadius="full" boxShadow="lg">
+          <Flex
+            align="center"
+            p={2}
+            bg="#000000"
+            borderRadius="full"
+            boxShadow="lg"
+            pl={3}
+          >
             <MdOutlineAccountBalanceWallet size={24} color="#FEDF56" />
             <Text ml={2} fontSize="md" color="#FEDF56">
               {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
             </Text>
-          </Box>
+          </Flex>
         </HStack>
       )}
     </Flex>
   );
-};
+}
 
 export default Header;
