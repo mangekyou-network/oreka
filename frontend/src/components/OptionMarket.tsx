@@ -1,418 +1,398 @@
-import React, { useState, useEffect } from 'react';
-import { Flex, Box, Text, Button, SimpleGrid, VStack, useToast, Input } from '@chakra-ui/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Flex, Box, Text, Button, VStack, useToast, Input, 
+  Select, HStack, Icon, ScaleFade, Table, Thead, Tbody, Tr, Th, Td
+} from '@chakra-ui/react';
+import { FaEthereum, FaWallet, FaTrophy } from 'react-icons/fa';
 import { ethers } from 'ethers';
-import OptionButton from "../components/OptionButton";
-import Dropdown from "../components/Dropdown";
-import { UP_DOWN_TYPE } from "../contracts/types/index";
-import { useAppSelector } from "../reduxs/hooks";
-import { SMART_CONTRACT_ADDRESS } from '../configs/constants';
-import BinaryOptionMarketABI from '../contracts/abis/BinaryOptionMarketABI.json';
-import Header from '../layouts/Header'; // Đảm bảo đã import Header
+import { motion, useAnimation } from 'framer-motion';
+
+enum Side { Long, Short }
+enum Phase { Bidding, Trading, Maturity, Expiry }
+
+interface Coin {
+  value: string;
+  label: string;
+}
 
 function OptionMarket() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // Trạng thái login
-  const [userRole, setUserRole] = useState(''); // 'owner' or 'customer'
-  const [bidAmount, setBidAmount] = useState("");
-  const [coinData, setCoinData] = useState([]);
-  const [smAddress, setSmAddress] = useState<string>("");
-  const [contract, setContract] = useState<any>(true);
-  const [web3Provider, setWeb3Provider] = useState<ethers.providers.Web3Provider | null>(null);
-  const toast = useToast();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string>("");
+  const [balance, setBalance] = useState(0);
+  const [accumulatedWinnings, setAccumulatedWinnings] = useState(0);
+  const [bidAmount, setBidAmount] = useState("");
+  const [currentPhase, setCurrentPhase] = useState<Phase>(Phase.Bidding);
+  const [positions, setPositions] = useState({ long: 0, short: 0 });
+  const [totalDeposited, setTotalDeposited] = useState(0);
+  const [strikePrice, setStrikePrice] = useState<number>(100);
+  const [finalPrice, setFinalPrice] = useState<number>(0);
+  const [selectedCoin, setSelectedCoin] = useState<Coin | null>(null);
+  const [isResolved, setIsResolved] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+  const [resultMessage, setResultMessage] = useState("");
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [availableCoins] = useState<Coin[]>([
+    { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "WIF/USD" },
+    { value: "0x6fbdb2315678afecb367f032d93f642f64180aa3", label: "ETH/USD" },
+    { value: "0x7fbdb2315678afecb367f032d93f642f64180aa3", label: "BTC/USD" }
+  ]);
 
-  useEffect(() => {
-    const fetchCoinData = async () => {
-      const coins = [
-        { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "WIF/USD"},
-        { value: "0x6fbdb2315678afecb367f032d93f642f64180aa3", label: "ETH/USD"},
-        { value: "0x7fbdb2315678afecb367f032d93f642f64180aa3", label: "BTC/USD"}
-      ];
-      setCoinData(coins);
-    };
+  const toast = useToast();
+  const priceControls = useAnimation();
+  const currentPriceRef = useRef(strikePrice);
 
-    fetchCoinData();
-  }, []);
-
-  // Initialize contract when web3Provider and smAddress are set
-  useEffect(() => {
-    if (web3Provider && smAddress) {
-      try {
-        const signer = web3Provider.getSigner();
-        const newContract = new ethers.Contract(smAddress, BinaryOptionMarketABI, signer);
-        setContract(newContract);
-      } catch (error) {
-        console.error("Error initializing contract:", error);
-      }
-    }
-  }, [web3Provider, smAddress]);
-
-
-  // Wallet connection logic
   const connectWallet = async () => {
-    if (window.ethereum) {
+    if (typeof window.ethereum !== 'undefined') {
       try {
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
         const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const accounts = await provider.send("eth_requestAccounts", []);
-        const userAddress = accounts[0];
-        setWalletAddress(userAddress);
-        checkUserRole(userAddress);
-        setWeb3Provider(provider);
-        setIsLoggedIn(true); // Đánh dấu là đã login thành công
-
+        const signer = provider.getSigner();
+        const address = await signer.getAddress();
+        const balanceWei = await provider.getBalance(address);
+        const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
+        setWalletAddress(address);
+        setBalance(balanceEth);
+        setIsLoggedIn(true);
         toast({
           title: "Wallet connected successfully!",
-          description: `Connected account: ${userAddress}`,
+          description: `Address: ${abbreviateAddress(address)}`,
           status: "success",
           duration: 3000,
           isClosable: true,
         });
       } catch (error) {
-        console.error("Error connecting to MetaMask:", error);
+        console.error("Failed to connect wallet:", error);
         toast({
-          title: "Error",
-          description: "Failed to connect MetaMask. Please try again.",
+          title: "Failed to connect wallet",
+          description: error.message || "Please make sure MetaMask is installed and unlocked.",
           status: "error",
-          duration: 3000,
+          duration: 5000,
           isClosable: true,
         });
       }
     } else {
-      console.error("MetaMask is not installed.");
+      toast({
+        title: "MetaMask not detected",
+        description: "Please install MetaMask to use this feature.",
+        status: "warning",
+        duration: 5000,
+        isClosable: true,
+      });
     }
   };
 
-    // Role check function
-    const checkUserRole = (userAddress: string) => {
-      const ownerAddress = SMART_CONTRACT_ADDRESS;
-      if (userAddress.toLowerCase() === ownerAddress.toLowerCase()) {
-        setUserRole('owner');
-      } else {
-        setUserRole('customer');
-      }
-    };
-  
-    // Function to claim rewards
-    const handleClaimReward = async () => {
-      if (rewardsWon > 0 && contract) {
-        try {
-          await contract.claimReward();
-          toast({
-            title: "Reward claimed successfully!",
-            status: "success",
-            duration: 3000,
-            isClosable: true,
-          });
-          setRewardsWon(0);
-          setRewardClaimed(true);
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: "Failed to claim rewards. Please try again.",
-            status: "error",
-            duration: 3000,
-            isClosable: true,
-          });
-        }
-      } else {
-        toast({
-          title: "No Rewards",
-          description: "No rewards to claim.",
-          status: "info",
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-    };
-  
-    const [isModalVisible, setIsModalVisible] = useState(false); // Trạng thái hiển thị thông báo
-    const [isWin, setIsWin] = useState(false);
-  
-    // Function to handle coin selection from the dropdown
-    const handleSelectCoin = (selected: { value: string }) => {
-      setSmAddress(selected.value);
-    };
-  
-    // Owner functions
-    const handleStartTrading = async () => {
-      if (contract) {
-        console.log("Contract is initialized:", contract);
-        try {
-          await contract.startTrading();
-          toast({
-            title: "Trading started successfully!",
-            status: "success",
-            duration: 3000,
-            isClosable: true,
-          });
-        } catch (error) {
-          console.error("Error starting trading:", error);
-          toast({
-            title: "Error",
-            description: "Failed to start trading. Please try again.",
-            status: "error",
-            duration: 3000,
-            isClosable: true,
-          });
-        }
-      } else {
-        console.error("Contract is not initialized");
-      }
-    };
-    
-  
-    const handleResolve = async () => {
-      if (contract) {
-        try {
-          await contract.resolve();
-          toast({
-            title: "Trading resolved successfully!",
-            status: "success",
-            duration: 3000,
-            isClosable: true,
-          });
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: "Failed to resolve trading. Please try again.",
-            status: "error",
-            duration: 3000,
-            isClosable: true,
-          });
-        }
-      }
-    };
-  
-    const handleExpire = async () => {
-      if (contract) {
-        try {
-          await contract.expire();
-          toast({
-            title: "Option expired successfully!",
-            status: "success",
-            duration: 3000,
-            isClosable: true,
-          });
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: "Failed to expire option. Please try again.",
-            status: "error",
-            duration: 3000,
-            isClosable: true,
-          });
-        }
-      }
-    };
-  
-    const [randomNumber, setRandomNumber] = useState(0);
-    const handleClick = async() => {
-      if (!bidAmount || Number(bidAmount) <= 0) {
-        toast({
-          title: "Invalid Bid",
-          description: "Please enter a valid bid amount.",
-          status: "warning",
-          duration: 3000,
-          isClosable: true,
-        });
-        return;
-      }
-      const randomNum = Math.floor(Math.random()*2); 
-      setRandomNumber(randomNum); 
-      if (randomNum === UP_DOWN_TYPE.HEAD) {
-        setIsWin(true);
-      } else {
-        setIsWin(false);
-      }
-      setBidAmount("");
-      setIsModalVisible(true);
-      
+  const handleCoinSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = availableCoins.find(coin => coin.value === event.target.value);
+    if (selected) {
+      setSelectedCoin(selected);
+      resetMarket();
     }
-  
-    const handleCloseModal = () => {
-      setIsModalVisible(false);
-    };
-    
-  return (
-    <Flex direction="column" alignItems="center" justifyContent="flex-start" p={4}>
-      {/* Header sẽ hiển thị số dư và địa chỉ ví ở trên cùng */}
-      <Header walletAddress={walletAddress} />
+  };
 
-      {/* Nội dung chính của trang */}
-      <Box
+  const handleBid = async (side: Side) => {
+    if (!bidAmount || Number(bidAmount) <= 0) return;
+    
+    const bidAmountNumber = Number(bidAmount);
+    
+    if (bidAmountNumber > balance) {
+      toast({
+        title: "Insufficient balance",
+        description: "You don't have enough ETH to place this bid.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+    
+    try {
+      setBalance(prev => prev - bidAmountNumber);
+      setPositions(prev => ({
+        ...prev,
+        [Side[side].toLowerCase()]: prev[Side[side].toLowerCase()] + bidAmountNumber
+      }));
+      setTotalDeposited(prev => prev + bidAmountNumber);
+      
+      // Simulate market resolution
+      const simulatedFinalPrice = Math.random() * 200;
+      setFinalPrice(simulatedFinalPrice);
+
+      // Start countdown
+      for (let i = 5; i > 0; i--) {
+        setCountdown(i);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      setCountdown(null);
+
+      // Immediately change price after countdown
+      currentPriceRef.current = Number(simulatedFinalPrice.toFixed(2));
+      setIsResolved(true);
+      setCurrentPhase(Phase.Expiry);
+
+      // Change color based on price movement
+      await priceControls.start({
+        opacity: 1,
+        color: simulatedFinalPrice > strikePrice ? "#00FF00" : "#FF0000",
+        transition: { duration: 0.1 }
+      });
+
+      const won = (side === Side.Long && simulatedFinalPrice > strikePrice) ||
+                  (side === Side.Short && simulatedFinalPrice < strikePrice);
+      
+      if (won) {
+        const winnings = bidAmountNumber * 2; // Simple 2x reward for demo
+        setAccumulatedWinnings(prev => prev + winnings);
+        setResultMessage("YOU WIN");
+      } else {
+        setResultMessage("YOU LOSE");
+      }
+      setShowResult(true);
+
+      setTimeout(() => {
+        setShowResult(false);
+      }, 2000);
+      
+      setBidAmount("");
+
+      // Automatically start a new round after a short delay
+      setTimeout(() => {
+        resetMarket();
+      }, 3000);
+    } catch (error) {
+      console.error("Error placing bid:", error);
+      toast({
+        title: "Error placing bid",
+        description: "An unexpected error occurred. Please try again.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const resetMarket = () => {
+    setPositions({ long: 0, short: 0 });
+    setTotalDeposited(0);
+    const newStrikePrice = Number((Math.random() * 100 + 50).toFixed(2)); // Random strike price between 50 and 150
+    setStrikePrice(newStrikePrice);
+    currentPriceRef.current = newStrikePrice;
+    setFinalPrice(0);
+    setIsResolved(false);
+    setCurrentPhase(Phase.Bidding);
+    priceControls.set({ opacity: 1, color: "#FEDF56" });
+  };
+
+  const abbreviateAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const claimWinnings = () => {
+    setBalance(prev => prev + accumulatedWinnings);
+    setAccumulatedWinnings(0);
+    toast({
+      title: "Winnings claimed!",
+      description: `${accumulatedWinnings.toFixed(4)} ETH added to your balance.`,
+      status: "success",
+      duration: 3000,
+      isClosable: true,
+    });
+  };
+
+  return (
+    <Flex direction="column" alignItems="center" justifyContent="flex-start" p={6} bg="black" minH="100vh" position="relative">
+      <VStack
         width={{ base: '90%', md: '700px' }}
-        padding="20px"
-        borderRadius="10px"
-        textAlign="center"
+        spacing={8}
+        align="stretch"
         color="#FEDF56"
         fontFamily="Arial, sans-serif"
-        mt={6}
       >
-        {/* Owner Interface */}
-        {isLoggedIn && userRole === 'owner' && (
-        <VStack spacing={4}>
-            <Text >Owner Dashboard</Text>
-              <SimpleGrid columns={3} spacing={8}>
-                <OptionButton text="Start Trading" onClick={handleStartTrading} />
-                <OptionButton text="Resolve" onClick={handleResolve} />
-                <OptionButton text="Expire" onClick={handleExpire} />
-              </SimpleGrid>    
-        </VStack>
-
-        )}
-
-
-        {/* Customer Interface */}
-        {isLoggedIn && userRole === 'customer' && (
-        <VStack spacing={10}>
-          {/* Dropdown cho select coin */}
-            <Box 
-              display="flex" 
-              justifyContent="center" 
-              alignItems="center" 
-              width="100%" 
-              maxWidth="300px"
-            >
-              <Dropdown
-                data={coinData}
-                placeholder={"Select Coin"}
-                selectedValue={smAddress}
-                onSelectItem={handleSelectCoin}
-                width="100%"
-                backgroundColor="transparent"
-                border="none"
-                _focus={{ boxShadow: 'none' }}
-                _hover={{ backgroundColor: "#EAEAEA" }}
-                padding="0"
-              />
-            </Box>
-
-            
-              <Box display="flex"
-                alignItems="center"
-                justifyContent="center"
-                width="700px" 
-                height="200px" 
-                border="2px solid #FEDF56"
-                borderRadius="400px"
-                // backgroundColor="#FEDF56" 
-                color="#FEDF56" 
-                fontSize="4xl" 
-                fontWeight="bold"
-              >
-              <Text fontSize="7xl" fontWeight="bold" color="#FEDF56" >{randomNumber}</Text>
-            </Box>
-
-
-          {/* Chỉ hiển thị các nút bid sau khi đã login */}
-              <Input
-                placeholder="Enter bid amount in ETH"
-                value={bidAmount}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  // Kiểm tra nếu giá trị nhập vào là số hoặc chuỗi rỗng
-                  if (!isNaN(Number(value)) || value === "") {
-                    setBidAmount(value);
-                  }
-                }}
-                inputMode="numeric"
-                //bg="#FEDF56" 
-                color="#FEDF56" 
-                border="none"
-                //borderRadius="full"
-
-                width="100%"
-                height="50px"
-                mr="20px"
-                textAlign="center"
-                mb={6}
-                _placeholder={{ color: "#FEDF56", fontSize: "xl" }} 
-                fontWeight="bold"
-              />
-
-              {/* Các nút Up và Down */}
-              <Flex justify="center" mt={2} mb={2} gap="80px">
+        {isLoggedIn && (
+          <HStack spacing={4} justify="space-between" width="100%">
+            <HStack>
+              <Icon as={FaWallet} />
+              <Text>{abbreviateAddress(walletAddress)}</Text>
+            </HStack>
+            <HStack>
+              <Icon as={FaEthereum} />
+              <Text>{balance.toFixed(4)} ETH</Text>
+            </HStack>
+            <HStack>
+              <Icon as={FaTrophy} />
+              <Text>{accumulatedWinnings.toFixed(4)} ETH</Text>
+              {accumulatedWinnings > 0 && (
                 <Button
-                  bg="#FFD700"
-                  color="#5D3A1A"
-                  //borderRadius="full"
-                  width="320px"
-                  height="60px"
-                  backgroundColor="#FEDF56"
-                  _hover={{ backgroundColor: "#28A745" }}
-                  pointerEvents="auto"
-                  onClick={() => handleClick(UP_DOWN_TYPE.HEAD)}
-                  isDisabled={!bidAmount || Number(bidAmount) <= 0 || !smAddress}
+                  onClick={claimWinnings}
+                  size="sm"
+                  colorScheme="yellow"
+                  variant="outline"
                 >
-                  Up
+                  Claim
                 </Button>
-                <Button
-                  bg="#FFD700"
-                  color="#5D3A1A"
-                  //borderRadius="full"
-                  width="320px"
-                  height="60px"
-                  backgroundColor="#FEDF56"
-                  _hover={{ backgroundColor: "#DC3545" }}
-                  pointerEvents="auto"
-                  onClick={() => handleClick(UP_DOWN_TYPE.TAIL)}
-                  isDisabled={!bidAmount || Number(bidAmount) <= 0 || !smAddress}
-                >
-                  Down
-                </Button>
-              </Flex>
-          {/* Modal thông báo */}
-
-          {isModalVisible && (
-          <Box
-            position="fixed"
-            top="0"
-            left="0"
-            width="100%"
-            height="100%"
-            bg="rgba(0, 0, 0, 0.5)" 
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            zIndex="999"
-          >
-            <Box
-              width="400px"
-              padding="20px"
-              bg="white"
-              borderRadius="10px"
-              textAlign="center"
-              color={isWin ? "green.500" : "red.500"}
-            >
-              <Text fontSize="4xl" fontWeight="bold">
-                {isWin ? "YOU WIN!" : "YOU LOSE!"}
-              </Text>
-              <Button mt={4} onClick={handleCloseModal} style={{ color: "red" }} >Đóng</Button>
-            </Box>
-          </Box>
+              )}
+            </HStack>
+          </HStack>
         )}
-      </VStack>
-      )}
-
-        {/* Nút connect wallet nếu chưa login */}
-        {!isLoggedIn && (
+  
+        {isLoggedIn ? (
+          <>
+            <Select 
+              placeholder="Select Coin" 
+              onChange={handleCoinSelect} 
+              value={selectedCoin?.value || ''}
+              color="black"
+              bg="#FEDF56"
+              size="lg"
+            >
+              {availableCoins.map((coin) => (
+                <option key={coin.value} value={coin.value}>
+                  {coin.label}
+                </option>
+              ))}
+            </Select>
+            {selectedCoin && (
+              <VStack spacing={8} alignItems="center">
+                <Box
+                  border="2px solid #FEDF56"
+                  borderRadius="full"
+                  padding="20px"
+                  width="100%"
+                  textAlign="center"
+                >
+                  <motion.div animate={priceControls}>
+                    <Text fontSize="4xl" fontWeight="bold">
+                      {currentPriceRef.current.toFixed(2)}
+                    </Text>
+                  </motion.div>
+                </Box>
+                <VStack spacing={2}>
+                  <Text fontSize="lg">Current Phase: {Phase[currentPhase]}</Text>
+                  <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ETH</Text>
+                </VStack>
+  
+                <VStack spacing={8} width="100%">
+                  <Input
+                    placeholder="Enter bid amount in ETH"
+                    value={bidAmount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^\d*\.?\d*$/.test(value)) setBidAmount(value);
+                    }}
+                    color="#FEDF56"
+                    bg="transparent"
+                    border="none"
+                    textAlign="center"
+                    _placeholder={{ color: "#FEDF56" }}
+                    size="lg"
+                    fontSize="xl"
+                  />
+  
+                  <Flex justify="center" gap="100px">
+                    <Button
+                      onClick={() => handleBid(Side.Long)}
+                      isDisabled={!bidAmount || Number(bidAmount) <= 0}
+                      bg="#FEDF56"
+                      color="black"
+                      _hover={{ bg: "#D5D5D5", color: "green", transform: "scale(1.2)" }}
+                      width="120px"
+                      height="50px"
+                      fontSize="xl"
+                      transition="all 0.2s"
+                    >
+                      Up
+                    </Button>
+                    <Button
+                      onClick={() => handleBid(Side.Short)}
+                      isDisabled={!bidAmount || Number(bidAmount) <= 0}
+                      bg="#FEDF56"
+                      color="black"
+                      _hover={{ bg: "#D5D5D5", color: "red", transform: "scale(1.2)" }}
+                      width="120px"
+                      height="50px"
+                      fontSize="xl"
+                      transition="all 0.2s"
+                    >
+                      Down
+                    </Button>
+                  </Flex>
+  
+                  <Table variant="simple" colorScheme="yellow">
+                    <Thead>
+                      <Tr>
+                        <Th color="#FEDF56">Position</Th>
+                        <Th color="#FEDF56" isNumeric>Your Bid</Th>
+                        <Th color="#FEDF56" isNumeric>Total Market</Th>
+                      </Tr>
+                    </Thead>
+                    <Tbody>
+                      <Tr>
+                        <Td>Long</Td>
+                        <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
+                        <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
+                      </Tr>
+                      <Tr>
+                        <Td>Short</Td>
+                        <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
+                        <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
+                      </Tr>
+                    </Tbody>
+                  </Table>
+                </VStack>
+              </VStack>
+            )}
+          </>
+        ) : (
           <Button
             onClick={connectWallet}
-            backgroundColor="#EAEAEA"
+            backgroundColor="#FEDF56"
             color="#5D3A1A"
             _hover={{ backgroundColor: "#D5D5D5" }}
-            marginTop="15px"
-            padding="10px"
+            padding="25px"
             borderRadius="full"
             fontWeight="bold"
+            fontSize="xl"
             w="full"
-           backgroundColor="#FEDF56"
           >
-            Login / Connect MetaMask
+            Login / Connect Wallet
           </Button>
         )}
-      </Box>
+      </VStack>
+      
+      {countdown !== null && (
+        <Box
+          position="fixed"
+          top="50%"
+          left="50%"
+          transform="translate(-50%, -50%)"
+          bg="rgba(0, 0, 0, 0.8)"
+          color="#FEDF56"
+          fontSize="6xl"
+          fontWeight="bold"
+          p={8}
+          borderRadius="xl"
+          zIndex={1000}
+        >
+          {countdown}
+        </Box>
+      )}
+      <ScaleFade initialScale={0.9} in={showResult}>
+        <Box
+          position="fixed"
+          top="50%"
+          left="50%"
+          transform="translate(-50%, -50%)"
+          bg={resultMessage === "YOU WIN" ? "green.500" : "red.500"}
+          color="white"
+          fontSize="5xl"
+          fontWeight="bold"
+          p={8}
+          borderRadius="xl"
+          zIndex={1000}
+        >
+          {resultMessage}
+        </Box>
+      </ScaleFade>
     </Flex>
   );
 }
-
 export default OptionMarket;
