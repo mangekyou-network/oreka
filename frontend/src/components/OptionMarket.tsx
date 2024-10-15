@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Flex, Box, Text, Button, VStack, useToast, Input, 
-  Select, HStack, Icon, ScaleFade, Table, Thead, Tbody, Tr, Th, Td
+  Select, HStack, Icon, ScaleFade, Table, Thead, Tbody, Tr, Th, Td, SimpleGrid
 } from '@chakra-ui/react';
 import { FaEthereum, FaWallet, FaTrophy } from 'react-icons/fa';
 import { ethers } from 'ethers';
 import { motion, useAnimation } from 'framer-motion';
+import { SMART_CONTRACT_ADDRESS } from '../configs/constants';
 
 enum Side { Long, Short }
 enum Phase { Bidding, Trading, Maturity, Expiry }
@@ -16,6 +17,7 @@ interface Coin {
 }
 
 function OptionMarket() {
+  const [contract, setContract] = useState<any>(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string>("");
   const [balance, setBalance] = useState(0);
@@ -31,6 +33,7 @@ function OptionMarket() {
   const [showResult, setShowResult] = useState(false);
   const [resultMessage, setResultMessage] = useState("");
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [userRole, setUserRole] = useState('');
   const [availableCoins] = useState<Coin[]>([
     { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "WIF/USD" },
     { value: "0x6fbdb2315678afecb367f032d93f642f64180aa3", label: "ETH/USD" },
@@ -50,9 +53,18 @@ function OptionMarket() {
         const address = await signer.getAddress();
         const balanceWei = await provider.getBalance(address);
         const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
+        
         setWalletAddress(address);
         setBalance(balanceEth);
         setIsLoggedIn(true);
+  
+        // Kiểm tra vai trò người dùng
+        if (address.toLowerCase() === SMART_CONTRACT_ADDRESS.toLowerCase()) {
+          setUserRole('owner');
+        } else {
+          setUserRole('customer');
+        }
+  
         toast({
           title: "Wallet connected successfully!",
           description: `Address: ${abbreviateAddress(address)}`,
@@ -80,6 +92,7 @@ function OptionMarket() {
       });
     }
   };
+  
 
   const handleCoinSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const selected = availableCoins.find(coin => coin.value === event.target.value);
@@ -198,6 +211,77 @@ function OptionMarket() {
     });
   };
 
+  const handleStartTrading = async () => {
+    if (contract) {
+      console.log("Contract is initialized:", contract);
+      try {
+        await contract.startTrading();
+        toast({
+          title: "Trading started successfully!",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      } catch (error) {
+        console.error("Error starting trading:", error);
+        toast({
+          title: "Error",
+          description: "Failed to start trading. Please try again.",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } else {
+      console.error("Contract is not initialized");
+    }
+  };
+  
+
+  const handleResolve = async () => {
+    if (contract) {
+      try {
+        await contract.resolve();
+        toast({
+          title: "Trading resolved successfully!",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to resolve trading. Please try again.",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    }
+  };
+
+  const handleExpire = async () => {
+    if (contract) {
+      try {
+        await contract.expire();
+        toast({
+          title: "Option expired successfully!",
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to expire option. Please try again.",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    }
+  };
+
   return (
     <Flex direction="column" alignItems="center" justifyContent="flex-start" p={6} bg="black" minH="100vh" position="relative">
       <VStack
@@ -233,115 +317,127 @@ function OptionMarket() {
             </HStack>
           </HStack>
         )}
-  
-        {isLoggedIn ? (
+        {/* Hiển thị giao diện dựa trên vai trò */}
+      {userRole === 'owner' && (
+        <VStack spacing={4}>
+          <Text>Owner Dashboard</Text>
+          <SimpleGrid columns={3} spacing={8}>
+            <Button onClick={handleStartTrading}>Start Trading</Button>
+            <Button onClick={handleResolve}>Resolve</Button>
+            <Button onClick={handleExpire}>Expire</Button>
+          </SimpleGrid>
+        </VStack>
+      )}
+        {userRole === 'customer' && (
           <>
-            <Select 
-              placeholder="Select Coin" 
-              onChange={handleCoinSelect} 
-              value={selectedCoin?.value || ''}
-              color="black"
-              bg="#FEDF56"
-              size="lg"
-            >
-              {availableCoins.map((coin) => (
-                <option key={coin.value} value={coin.value}>
-                  {coin.label}
-                </option>
-              ))}
-            </Select>
-            {selectedCoin && (
-              <VStack spacing={8} alignItems="center">
-                <Box
-                  border="2px solid #FEDF56"
-                  borderRadius="full"
-                  padding="20px"
-                  width="100%"
-                  textAlign="center"
-                >
-                  <motion.div animate={priceControls}>
-                    <Text fontSize="4xl" fontWeight="bold">
-                      {currentPriceRef.current.toFixed(2)}
-                    </Text>
-                  </motion.div>
-                </Box>
-                <VStack spacing={2}>
-                  <Text fontSize="lg">Current Phase: {Phase[currentPhase]}</Text>
-                  <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ETH</Text>
-                </VStack>
-  
-                <VStack spacing={8} width="100%">
-                  <Input
-                    placeholder="Enter bid amount in ETH"
-                    value={bidAmount}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (/^\d*\.?\d*$/.test(value)) setBidAmount(value);
-                    }}
-                    color="#FEDF56"
-                    bg="transparent"
-                    border="none"
-                    textAlign="center"
-                    _placeholder={{ color: "#FEDF56" }}
-                    size="lg"
-                    fontSize="xl"
-                  />
-  
-                  <Flex justify="center" gap="100px">
-                    <Button
-                      onClick={() => handleBid(Side.Long)}
-                      isDisabled={!bidAmount || Number(bidAmount) <= 0}
-                      bg="#FEDF56"
-                      color="black"
-                      _hover={{ bg: "#D5D5D5", color: "green", transform: "scale(1.2)" }}
-                      width="120px"
-                      height="50px"
-                      fontSize="xl"
-                      transition="all 0.2s"
-                    >
-                      Up
-                    </Button>
-                    <Button
-                      onClick={() => handleBid(Side.Short)}
-                      isDisabled={!bidAmount || Number(bidAmount) <= 0}
-                      bg="#FEDF56"
-                      color="black"
-                      _hover={{ bg: "#D5D5D5", color: "red", transform: "scale(1.2)" }}
-                      width="120px"
-                      height="50px"
-                      fontSize="xl"
-                      transition="all 0.2s"
-                    >
-                      Down
-                    </Button>
-                  </Flex>
-  
-                  <Table variant="simple" colorScheme="yellow">
-                    <Thead>
-                      <Tr>
-                        <Th color="#FEDF56">Position</Th>
-                        <Th color="#FEDF56" isNumeric>Your Bid</Th>
-                        <Th color="#FEDF56" isNumeric>Total Market</Th>
-                      </Tr>
-                    </Thead>
-                    <Tbody>
-                      <Tr>
-                        <Td>Long</Td>
-                        <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
-                        <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
-                      </Tr>
-                      <Tr>
-                        <Td>Short</Td>
-                        <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
-                        <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
-                      </Tr>
-                    </Tbody>
-                  </Table>
-                </VStack>
+          <Select 
+            placeholder="Select Coin" 
+            onChange={handleCoinSelect} 
+            value={selectedCoin?.value || ''}
+            color="black"
+            bg="#FEDF56"
+            size="lg"
+          >
+            {availableCoins.map((coin) => (
+              <option key={coin.value} value={coin.value}>
+                {coin.label}
+              </option>
+            ))}
+          </Select>
+          {selectedCoin && (
+            <VStack spacing={8} alignItems="center">
+              <Box
+                border="2px solid #FEDF56"
+                borderRadius="full"
+                padding="20px"
+                width="100%"
+                textAlign="center"
+              >
+                <motion.div animate={priceControls}>
+                  <Text fontSize="4xl" fontWeight="bold">
+                    {currentPriceRef.current.toFixed(2)}
+                  </Text>
+                </motion.div>
+              </Box>
+              <VStack spacing={2}>
+                <Text fontSize="lg">Current Phase: {Phase[currentPhase]}</Text>
+                <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ETH</Text>
               </VStack>
-            )}
-          </>
-        ) : (
+
+              <VStack spacing={8} width="100%">
+                <Input
+                  placeholder="Enter bid amount in ETH"
+                  value={bidAmount}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (/^\d*\.?\d*$/.test(value)) setBidAmount(value);
+                  }}
+                  color="#FEDF56"
+                  bg="transparent"
+                  border="none"
+                  textAlign="center"
+                  _placeholder={{ color: "#FEDF56" }}
+                  size="lg"
+                  fontSize="xl"
+                />
+
+                <Flex justify="center" gap="100px">
+                  <Button
+                    onClick={() => handleBid(Side.Long)}
+                    isDisabled={!bidAmount || Number(bidAmount) <= 0}
+                    bg="#FEDF56"
+                    color="black"
+                    _hover={{ bg: "#D5D5D5", color: "green", transform: "scale(1.2)" }}
+                    width="120px"
+                    height="50px"
+                    fontSize="xl"
+                    transition="all 0.2s"
+                  >
+                    Up
+                  </Button>
+                  <Button
+                    onClick={() => handleBid(Side.Short)}
+                    isDisabled={!bidAmount || Number(bidAmount) <= 0}
+                    bg="#FEDF56"
+                    color="black"
+                    _hover={{ bg: "#D5D5D5", color: "red", transform: "scale(1.2)" }}
+                    width="120px"
+                    height="50px"
+                    fontSize="xl"
+                    transition="all 0.2s"
+                  >
+                    Down
+                  </Button>
+                </Flex>
+
+                <Table variant="simple" colorScheme="yellow">
+                  <Thead>
+                    <Tr>
+                      <Th color="#FEDF56">Position</Th>
+                      <Th color="#FEDF56" isNumeric>Your Bid</Th>
+                      <Th color="#FEDF56" isNumeric>Total Market</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    <Tr>
+                      <Td>Long</Td>
+                      <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
+                      <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
+                    </Tr>
+                    <Tr>
+                      <Td>Short</Td>
+                      <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
+                      <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
+                    </Tr>
+                  </Tbody>
+                </Table>
+              </VStack>
+            </VStack>
+          )}
+        </>
+        )}
+
+        {!isLoggedIn && (
           <Button
             onClick={connectWallet}
             backgroundColor="#FEDF56"
