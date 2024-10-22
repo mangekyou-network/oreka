@@ -54,7 +54,7 @@ contract BinaryOptionMarket is Ownable {
 
 
     function bid(Side side) public payable {
-        require(currentPhase == Phase.Bidding, "Not in bidding phase");
+        require(currentPhase == Phase.Trading, "Not in Trading phase");
         require(msg.value > 0, "Value must be greater than zero");
 
         if (side == Side.Long) {
@@ -141,7 +141,7 @@ contract BinaryOptionMarket is Ownable {
     }
 
 
-        function withdraw() public {
+        function withdraw() public onlyOwner {
             uint amount = address(this).balance;
             require(amount > 0, "No balance to withdraw.");
 

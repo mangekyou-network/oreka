@@ -10,6 +10,6 @@ export const fonts = {
   STATE_WIDE: "StateWide",
 };
 export const SMART_CONTRACT_ADDRESS =
-  "0xf38Bd7c94c8C02d2BEEA72b31b7f1Cc30962dD01";
+  "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 export const AGGREGATORS_URL =
   "https://config.orakl.network/baobab_aggregators.json";

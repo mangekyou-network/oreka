@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useState } from "react";
 // import { ethers } from "ethers";
 // import { SMART_CONTRACT_ADDRESS } from '../../configs/constants';
 import OptionMarket from "../../components/OptionMarket";
+import Owner from "../../components/Owner";
 
 const DEFAULT_SECOND = 30;
 
@@ -161,6 +162,7 @@ export default function UpDownContainer() {
   return (
     <>
     <OptionMarket/>
+    {/* <Owner/> */}
       {/* <Flex
         flex={1}
         w="100%"
