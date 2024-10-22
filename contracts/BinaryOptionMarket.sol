@@ -52,6 +52,10 @@ contract BinaryOptionMarket is Ownable {
         transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
     }
 
+     function setStrikePrice(uint _strikePrice) external onlyOwner {
+        oracleDetails.strikePrice = _strikePrice;
+    }
+
 
     function bid(Side side) public payable {
         require(currentPhase == Phase.Trading, "Not in Trading phase");

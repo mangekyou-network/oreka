@@ -161,8 +161,8 @@ export default function UpDownContainer() {
 
   return (
     <>
-    <OptionMarket/>
-    {/* <Owner/> */}
+    {/* <OptionMarket/> */}
+    <Owner/>
       {/* <Flex
         flex={1}
         w="100%"
