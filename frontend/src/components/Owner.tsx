@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 import { Box, Button, Input, VStack, useToast, HStack, Icon, SimpleGrid, Text } from '@chakra-ui/react';
 import { FaEthereum, FaWallet } from 'react-icons/fa';
@@ -10,6 +10,7 @@ const Owner = () => {
   const [strikePrice, setStrikePrice] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
   const [balance, setBalance] = useState('');
+  const [contractBalance, setContractBalance] = useState(''); 
   const [isWalletConnected, setIsWalletConnected] = useState(false);
 
   const FactoryAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
@@ -63,32 +64,46 @@ const Owner = () => {
   };
 
   // Triển khai hợp đồng với CREATE2
+    // Triển khai hợp đồng với CREATE2
+// Triển khai hợp đồng với CREATE2
   const deployContract = async () => {
     try {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
-      const factoryContract = new ethers.Contract(FactoryAddress, Factory.abi, signer);
+      
+      // Tạo đối tượng ContractFactory từ bytecode và ABI của hợp đồng
+      const factory = new ethers.ContractFactory(BinaryOptionMarket.abi, BinaryOptionMarket.bytecode, signer);
+      
+      // Chuyển đổi strikePrice thành số
+      const strikePriceValue = parseFloat(strikePrice);
+      if (isNaN(strikePriceValue)) {
+        throw new Error("Invalid strike price");
+      }
 
       // Salt ngẫu nhiên
       const randomSalt = ethers.utils.hexlify(ethers.utils.randomBytes(32));
       
+      console.log("Wallet Address:", walletAddress);
+      console.log("Strike Price Value:", strikePriceValue);
+      console.log("Random Salt:", randomSalt);
+
       // Triển khai hợp đồng
-      const tx = await factoryContract.deploy(ethers.utils.keccak256(randomSalt), BinaryOptionMarket.bytecode, [walletAddress, strikePrice]);
-      await tx.wait();
+      const contract = await factory.deploy(walletAddress, strikePriceValue); // Triển khai hợp đồng với tham số constructor
+      await contract.deployed();
+      
+      console.log("Contract deployed at:", contract.address);
+      
+      setContractAddress(contract.address);
 
-      // Lấy địa chỉ hợp đồng mới triển khai
-      const deployedAddress = await factoryContract.getAddress(ethers.utils.keccak256(randomSalt));
-      setContractAddress(deployedAddress);
-
-      // Hiển thị thông báo
+      // Hiển thị thông báo thành công
       toast({
         title: "Contract deployed successfully!",
-        description: `Contract deployed at: ${deployedAddress}`,
+        description: `Contract deployed at: ${contract.address}`,
         status: "success",
         duration: 5000,
         isClosable: true,
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to deploy contract:", error);
       toast({
         title: "Failed to deploy contract",
@@ -212,11 +227,54 @@ const Owner = () => {
       });
     }
   };
+  
+  const fetchContractBalance = async () => {
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const contractBalanceWei = await provider.getBalance(contractAddress);
+      const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei));
+      setContractBalance(contractBalanceEth.toFixed(4));
+    } catch (error) {
+      console.error("Failed to fetch contract balance:", error);
+    }
+  };
 
-  return (
-    <VStack 
-    color="#FEDF56"
-    fontFamily="Arial, sans-serif">
+  const withdraw = async () => {
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
+
+      const tx = await binaryOptionMarketContract.withdraw();
+      await tx.wait();
+
+      toast({
+        title: "Withdrawal successful!",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+      fetchContractBalance(); // Cập nhật lại số dư sau khi rút
+    } catch (error: any) {
+      console.error("Failed to withdraw:", error);
+      toast({
+        title: "Failed to withdraw",
+        description: error.message || "An unexpected error occurred.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (contractAddress) {
+      fetchContractBalance();
+    }
+  }, [contractAddress]);
+
+   return (
+    <VStack color="#FEDF56" fontFamily="Arial, sans-serif">
       {!isWalletConnected ? (
         <Button 
           onClick={connectWallet} 
@@ -237,6 +295,7 @@ const Owner = () => {
               <Text>{parseFloat(balance).toFixed(4)} ETH</Text>
             </HStack>
           </HStack>
+
       )}
 
       <SimpleGrid columns={1}>
@@ -259,6 +318,36 @@ const Owner = () => {
           </Button>
         </HStack>
       </SimpleGrid>
+
+      {contractAddress && (
+        <>
+          <SimpleGrid spacing={20} my={8}>
+            <VStack justify="center" alignItems="center" my={10}>
+            <HStack>
+              <Text fontSize="xl" color="white">Contract Address:</Text>
+              <Text fontSize="xl" color="white">{contractAddress}</Text>
+            </HStack>
+            <HStack>
+                <Text fontSize="xl" color="white">Contract Balance:</Text>
+                <Text fontSize="xl" color="white">{contractBalance} ETH</Text>
+              </HStack>
+            </VStack>
+          </SimpleGrid>
+
+          {/* Chỉ hiển thị nút Withdraw nếu Contract Balance khác 0 */}
+          {contractBalance !== '0.0000' && (
+            <Button 
+              size="lg" 
+              w="200px" 
+              p={6} 
+              colorScheme="orange"
+              _hover={{ bg: "orange.600", transform: "scale(1.05)" }}
+              onClick={withdraw}>
+                Withdraw
+            </Button>
+          )}
+        </>
+      )}
 
       <SimpleGrid columns={3} spacing={20} my={8}>
         <Button 
@@ -289,12 +378,6 @@ const Owner = () => {
             Expire
         </Button>
       </SimpleGrid>
-
-      {contractAddress && (
-        <Box>
-          <Text color="white">Contract Address: {contractAddress}</Text>
-        </Box>
-      )}
     </VStack>
   );
 };

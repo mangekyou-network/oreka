@@ -46,7 +46,7 @@ function OptionMarket() {
 
   const toast = useToast();
   const priceControls = useAnimation();
-  const contractAddress = "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e";  // Địa chỉ contract của bạn
+  const contractAddress = "0x4A679253410272dd5232B3Ff7cF5dbB88f295319";  // Địa chỉ contract của bạn
 
   useEffect(() => {
     if (isLoggedIn) {
