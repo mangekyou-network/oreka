@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./OracleConsumer.sol";
 
 contract BinaryOptionMarket is Ownable {
@@ -43,17 +43,22 @@ contract BinaryOptionMarket is Ownable {
 
     constructor(
         address _owner,
-        address _coprocessor,
+        //address _coprocessor,
         uint _strikePrice
     ) Ownable(_owner) {
-        priceFeed = OracleConsumer(_coprocessor);
+        //priceFeed = OracleConsumer(_coprocessor);
         oracleDetails = OracleDetails(_strikePrice, "0");
         currentPhase = Phase.Bidding;
         transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
     }
 
+     function setStrikePrice(uint _strikePrice) external onlyOwner {
+        oracleDetails.strikePrice = _strikePrice;
+    }
+
+
     function bid(Side side) public payable {
-        require(currentPhase == Phase.Bidding, "Not in bidding phase");
+        require(currentPhase == Phase.Trading, "Not in Trading phase");
         require(msg.value > 0, "Value must be greater than zero");
 
         if (side == Side.Long) {
@@ -68,40 +73,28 @@ contract BinaryOptionMarket is Ownable {
         emit Bid(side, msg.sender, msg.value);
     }
 
-    function multiBid(Side[] memory sides, uint[] memory values) public payable {
-        require(currentPhase == Phase.Bidding, "Not in bidding phase");
-        require(sides.length == values.length, "Mismatched inputs");
-
-        uint totalValue = 0;
-
-        for (uint i = 0; i < sides.length; i++) {
-            totalValue += values[i];
-        }
-
-        require(msg.value == totalValue, "Incorrect ETH amount for bids");
-
-        for (uint i = 0; i < sides.length; i++) {
-            if (sides[i] == Side.Long) {
-                positions.long += values[i];
-                longBids[msg.sender] += values[i];
-            } else {
-                positions.short += values[i];
-                shortBids[msg.sender] += values[i];
-            }
-
-            totalDeposited += values[i];
-            emit Bid(sides[i], msg.sender, values[i]);
-        }
-    }
-
+    event MarketOutcome(Side winningSide, address indexed user, bool isWinner);
     function resolveMarket() external onlyOwner {
         require(currentPhase == Phase.Trading, "Market not in trading phase");
         currentPhase = Phase.Maturity;
 
-        (string memory price, uint updatedAt) = oraclePriceAndTimestamp();
+        string memory price = "10"; // Đây là giá giả định, sẽ lấy từ Oracle thực tế
+        uint updatedAt = 1;
         oracleDetails.finalPrice = price;
         resolved = true;
         emit MarketResolved(price, updatedAt);
+
+        // Thêm thông báo cho bên thắng
+        uint finalPrice = parsePrice(oracleDetails.finalPrice);
+
+        Side winningSide;
+        if (finalPrice >= oracleDetails.strikePrice) {
+            winningSide = Side.Long;
+        } else {
+            winningSide = Side.Short;
+        }
+
+        emit MarketOutcome(winningSide, address(0), true); // Thông báo kết quả thị trường
     }
 
     function claimReward() external {
@@ -120,14 +113,24 @@ contract BinaryOptionMarket is Ownable {
 
         uint userDeposit;
         uint totalWinningDeposits;
+        bool isWinner = false;
 
         if (winningSide == Side.Long) {
             userDeposit = longBids[msg.sender];
             totalWinningDeposits = positions.long;
+            if (userDeposit > 0) {
+                isWinner = true;  // Người dùng thắng
+            }
         } else {
             userDeposit = shortBids[msg.sender];
             totalWinningDeposits = positions.short;
+            if (userDeposit > 0) {
+                isWinner = true;  // Người dùng thắng
+            }
         }
+
+        // Gửi sự kiện kết quả thắng/thua
+        emit MarketOutcome(winningSide, msg.sender, isWinner);
 
         require(userDeposit > 0, "No deposits on winning side");
 
@@ -141,20 +144,21 @@ contract BinaryOptionMarket is Ownable {
         emit RewardClaimed(msg.sender, finalReward);
     }
 
-    function withdraw() public {
-        uint amount = address(this).balance;
-        require(amount > 0, "No balance to withdraw.");
 
-        payable(msg.sender).transfer(amount);
+        function withdraw() public onlyOwner {
+            uint amount = address(this).balance;
+            require(amount > 0, "No balance to withdraw.");
 
-        emit Withdrawal(msg.sender, amount);
-    }
+            payable(msg.sender).transfer(amount);
 
-    function oraclePriceAndTimestamp() public view returns (string memory price, uint updatedAt) {
-        (, string memory answer, uint timeStamp, ) = priceFeed.latestRoundData();
-        price = answer;
-        updatedAt = timeStamp;
-    }
+            emit Withdrawal(msg.sender, amount);
+        }
+
+    // function oraclePriceAndTimestamp() public view returns (string memory price, uint updatedAt) {
+    //     (, string memory answer, uint timeStamp, ) = priceFeed.latestRoundData();
+    //     price = answer;
+    //     updatedAt = timeStamp;
+    // }
 
     function startTrading() external onlyOwner {
         require(currentPhase == Phase.Bidding, "Market not in bidding phase");
@@ -164,11 +168,6 @@ contract BinaryOptionMarket is Ownable {
     function expireMarket() external onlyOwner {
         require(currentPhase == Phase.Maturity, "Market not in maturity phase");
         currentPhase = Phase.Expiry;
-    }
-
-    function setFeePercentage(uint _feePercentage) public onlyOwner {
-        require(_feePercentage <= 20, "Fee percentage cannot exceed 20.");
-        feePercentage = _feePercentage;
     }
 
     function parsePrice(string memory priceString) internal pure returns (uint) {

@@ -47,7 +47,8 @@ function OptionMarket() {
 
   const toast = useToast();
   const priceControls = useAnimation();
-  const contractAddress = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318";  // Địa chỉ contract của bạn
+
+  const contractAddress = "0x4A679253410272dd5232B3Ff7cF5dbB88f295319";  // Địa chỉ contract của bạn
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -125,12 +126,6 @@ function OptionMarket() {
         
         setStrikePrice(parseFloat(ethers.utils.formatUnits(strikePriceBN, 0))); // Giả định 8 số thập phân
         setFinalPrice(parseFloat(ethers.utils.formatUnits(finalPriceBN, 0)));   // Giả định 8 số thập phân
-
-         // Lấy số dư hợp đồng
-         const provider = new ethers.providers.Web3Provider(window.ethereum);
-         const contractBalanceWei = await provider.getBalance(contractAddress);
-         const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei));
-         setContractBalance(contractBalanceEth); // Cập nhật số dư hợp đồng
       } catch (error) {
         console.error("Error fetching market details:", error);
       }
@@ -271,11 +266,6 @@ function OptionMarket() {
     }
   };
   useEffect(() => {
-    if (contract && currentPhase !== Phase.Expiry) { // Ngăn không cho cập nhật trong phase Bidding
-      fetchMarketDetails();
-    }
-  }, [contract]);
-  useEffect(() => {
     const interval = setInterval(() => {
       if (contract && currentPhase !== Phase.Bidding) { // Ngăn không cho cập nhật trong phase Bidding
         fetchMarketDetails();
@@ -325,8 +315,6 @@ function OptionMarket() {
       }
     }
   };
-  
-  
   
   const canClaimReward = useCallback(async () => {
     if (contract && currentPhase === Phase.Expiry) {

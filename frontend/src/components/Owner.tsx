@@ -12,9 +12,9 @@ const Owner = () => {
   const [balance, setBalance] = useState('');
   const [contractBalance, setContractBalance] = useState(''); 
   const [isWalletConnected, setIsWalletConnected] = useState(false);
-  
 
-  const FactoryAddress = "0x4c5859f0F772848b2D91F1D83E2Fe57935348029";
+  const FactoryAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+  
   const toast = useToast();  // Sử dụng useToast
 
   // Kết nối Metamask
@@ -126,8 +126,6 @@ const Owner = () => {
       const tx = await binaryOptionMarketContract.startTrading();
       await tx.wait();
 
-      fetchContractBalance();
-
       toast({
         title: "Trading started!",
         status: "success",
@@ -234,15 +232,14 @@ const Owner = () => {
   const fetchContractBalance = async () => {
     try {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const contractBalanceWei = await provider.getBalance(contractAddress); // Lấy số dư của contract
-      const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei)); // Chuyển đổi từ Wei sang ETH
-      setContractBalance(contractBalanceEth.toFixed(4)); // Cập nhật số dư
-      console.log("Contract Balance:", contractBalanceEth);
+
+      const contractBalanceWei = await provider.getBalance(contractAddress);
+      const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei));
+      setContractBalance(contractBalanceEth.toFixed(4));
     } catch (error) {
-      console.error("Failed to fetch contract balance:", error); // In lỗi nếu có vấn đề
+      console.error("Failed to fetch contract balance:", error);
     }
   };
-  
 
   const withdraw = async () => {
     try {
@@ -278,23 +275,21 @@ const Owner = () => {
     }
   }, [contractAddress]);
 
-  return (
-    <VStack color="#FEDF56" fontFamily="Arial, sans-serif" >
+   return (
+    <VStack color="#FEDF56" fontFamily="Arial, sans-serif">
       {!isWalletConnected ? (
         <Button 
           onClick={connectWallet} 
           colorScheme="teal" 
-          color="yellow"
-          fontSize="4xl"
-          fontWeight="bold"
-          w="500px"
-          p={8}
+
+          size="lg" 
+          p={6}
           _hover={{ bg: "teal.500", transform: "scale(1.05)" }}>
             Connect Wallet
         </Button>
       ) : (
-        <>
-          <HStack spacing={4} justify="space-between" width="500px" color="#FF6B6B">
+
+        <HStack spacing={4} justify="space-between" width="500px" color="#FF6B6B">
             <HStack>
               <Icon as={FaWallet} />
               <Text>{shortenAddress(walletAddress)}</Text>
@@ -303,87 +298,91 @@ const Owner = () => {
               <Icon as={FaEthereum} />
               <Text>{parseFloat(balance).toFixed(4)} ETH</Text>
             </HStack>
-            <HStack>
-              <Button 
-                size="lg" 
-                w="150px" 
-                p={4} 
-                colorScheme="orange"
-                _hover={{ bg: "orange.600", transform: "scale(1.05)" }}
-                onClick={withdraw}
-                isDisabled={contractBalance === '0.0000'}>
-                  Withdraw
-              </Button>
-            </HStack>
+
           </HStack>
 
-          <SimpleGrid columns={1}>
-            <HStack spacing={6} my={8}>
-              <Input
-                placeholder="Strike Price"
-                value={strikePrice}
-                onChange={(e) => setStrikePrice(Number(e.target.value))}
-                width={350}
-                bg="gray.800"
-                color="white"
-                _placeholder={{ color: "gray.500" }}
-              />
-              <Button 
-                onClick={deployContract} 
-                colorScheme="pink" 
-                size="lg" 
-                _hover={{ bg: "pink.600", transform: "scale(1.05)" }}>
-                  Deploy Contract
-              </Button>
+      )}
+
+      <SimpleGrid columns={1}>
+        <HStack spacing={6} my={8}>
+          <Input
+            placeholder="Strike Price"
+            value={strikePrice}
+            onChange={(e) => setStrikePrice(Number(e.target.value))}
+            width={350}
+            bg="gray.800"
+            color="white"
+            _placeholder={{ color: "gray.500" }}
+          />
+          <Button 
+            onClick={deployContract} 
+            colorScheme="pink" 
+            size="lg" 
+            _hover={{ bg: "pink.600", transform: "scale(1.05)" }}>
+              Deploy Contract
+          </Button>
+        </HStack>
+      </SimpleGrid>
+
+      {contractAddress && (
+        <>
+          <SimpleGrid spacing={20} my={8}>
+            <VStack justify="center" alignItems="center" my={10}>
+            <HStack>
+              <Text fontSize="xl" color="white">Contract Address:</Text>
+              <Text fontSize="xl" color="white">{contractAddress}</Text>
             </HStack>
+            <HStack>
+                <Text fontSize="xl" color="white">Contract Balance:</Text>
+                <Text fontSize="xl" color="white">{contractBalance} ETH</Text>
+              </HStack>
+            </VStack>
           </SimpleGrid>
 
-          {contractAddress && (
-            <SimpleGrid spacing={20} my={8}>
-              <VStack justify="center" alignItems="center" my={10}>
-                <HStack>
-                  <Text fontSize="xl" color="white">Contract Address:</Text>
-                  <Text fontSize="xl" color="white">{contractAddress}</Text>
-                </HStack>
-                <HStack>
-                  <Text fontSize="xl" color="white">Contract Balance:</Text>
-                  <Text fontSize="xl" color="white">{parseFloat(contractBalance).toFixed(4)} ETH</Text>
-                </HStack>
-              </VStack>
-            </SimpleGrid>
+          {/* Chỉ hiển thị nút Withdraw nếu Contract Balance khác 0 */}
+          {contractBalance !== '0.0000' && (
+            <Button 
+              size="lg" 
+              w="200px" 
+              p={6} 
+              colorScheme="orange"
+              _hover={{ bg: "orange.600", transform: "scale(1.05)" }}
+              onClick={withdraw}>
+                Withdraw
+            </Button>
           )}
-
-          <SimpleGrid columns={3} spacing={20} my={8}>
-            <Button 
-              size="lg" 
-              w="200px" 
-              p={6} 
-              colorScheme="purple"
-              _hover={{ bg: "purple.600", transform: "scale(1.05)" }}
-              onClick={startTrading}>
-                Start Trading
-            </Button>
-            <Button 
-              size="lg" 
-              w="200px" 
-              p={6} 
-              colorScheme="blue"
-              _hover={{ bg: "blue.600", transform: "scale(1.05)" }}
-              onClick={resolveMarket}>
-                Resolve
-            </Button>
-            <Button 
-              size="lg" 
-              w="200px" 
-              p={6} 
-              colorScheme="red"
-              _hover={{ bg: "red.600", transform: "scale(1.05)" }}
-              onClick={expireMarket}>
-                Expire
-            </Button>
-          </SimpleGrid>
         </>
       )}
+
+      <SimpleGrid columns={3} spacing={20} my={8}>
+        <Button 
+          size="lg" 
+          w="200px" 
+          p={6} 
+          colorScheme="purple"
+          _hover={{ bg: "purple.600", transform: "scale(1.05)" }}
+          onClick={startTrading}>
+            Start Trading
+        </Button>
+        <Button 
+          size="lg" 
+          w="200px" 
+          p={6} 
+          colorScheme="blue"
+          _hover={{ bg: "blue.600", transform: "scale(1.05)" }}
+          onClick={resolveMarket}>
+            Resolve
+        </Button>
+        <Button 
+          size="lg" 
+          w="200px" 
+          p={6} 
+          colorScheme="red"
+          _hover={{ bg: "red.600", transform: "scale(1.05)" }}
+          onClick={expireMarket}>
+            Expire
+        </Button>
+      </SimpleGrid>
     </VStack>
   );
 };

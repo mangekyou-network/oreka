@@ -38,13 +38,16 @@ function Dropdown({
 }: IProps) {
   const { onOpen, onClose, isOpen } = useDisclosure();
 
+  // Modified getText to show name and label if available
   const getText = useMemo(() => {
     const item = data.find((p) => p.value === selectedValue);
     if (!item) return placeholder;
-    return item.lable;
-  }, [selectedValue]);
+    // Show name if it exists, otherwise just label
+    return item.name ? `${item.name}: ${item.label}` : item.label; 
+  }, [selectedValue, data, placeholder]);
 
-  const color = getText === placeholder ? "#6a5809" : "#000";
+  // Set color based on whether the placeholder is displayed or not
+  const color = getText === placeholder ? "#FEDF56" : "#FEDF56";
 
   return (
     <Popover
@@ -54,11 +57,22 @@ function Dropdown({
       closeOnBlur={false}
     >
       <PopoverTrigger>
-        <Button variant={"primary"} w="full">
+        <Button
+          variant="unstyled" // Đặt thành unstyled để loại bỏ nền và viền mặc định
+          w="full"
+          bg="transparent" // Đảm bảo nền trong suốt
+          _hover={{ backgroundColor: "transparent" }} // Loại bỏ hiệu ứng hover
+          _focus={{ boxShadow: "none" }} // Loại bỏ hiệu ứng focus
+          padding={0} // Bỏ padding nếu có
+        >
           <VStack>
-            <Text color={color}>{getText}</Text>
+            {/* Centering and displaying the selected text */}
+            <Text color={color} textAlign="center" width="100%">
+              {getText}
+            </Text>
+            {/* Displaying the price if available */}
             {price !== undefined && (
-              <Text color="#6a5809" fontSize="8px">
+              <Text color="#6a5809" fontSize="8px" textAlign="center">
                 Price: {numberFormat(price || 0)}
               </Text>
             )}
@@ -66,12 +80,14 @@ function Dropdown({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        border="none"
-        boxShadow="0px 4px 4px rgba(0, 0, 0, 0.25)"
+        border="none" // Loại bỏ viền của PopoverContent
+        boxShadow="0px 4px 4px rgba(0, 0, 0, 0.25)" // Loại bỏ shadow
         padding={0}
         w="420px"
+        // bg="transparent" // Đặt nền trong suốt cho PopoverContent
       >
         <PopoverBody p={0}>
+          {/* Mapping through each dropdown item */}
           {data.map((drop) => (
             <Stack
               my="5px"
@@ -79,18 +95,25 @@ function Dropdown({
               key={drop.value}
               onClick={() => {
                 onSelectItem && onSelectItem(drop);
-                onClose();
+                onClose(); // Close the dropdown after selection
               }}
             >
               <Flex
                 py={2}
                 align={"center"}
                 w="full"
-                _hover={{ bgColor: "#fedf56", border: "1px solid #fff" }}
+                _hover={{ border: "1px solid #fff" }}
                 px="15px"
               >
-                <Text variant="notoSan" color="#6f632a" fontSize="16px">
-                  {drop.lable}
+                {/* Displaying the name and label, or just label if name is not available */}
+                <Text
+                  variant="notoSan"
+                  color="#6f632a"
+                  fontSize="16px"
+                  width="100%"
+                  textAlign="center"
+                >
+                  {drop.name ? `${drop.name}: ${drop.label}` : drop.label}
                 </Text>
               </Flex>
             </Stack>
