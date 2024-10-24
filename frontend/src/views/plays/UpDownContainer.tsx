@@ -11,9 +11,9 @@ import React, { useCallback, useEffect, useState } from "react";
 // import { BinaryOptionMarketContract } from "../../contracts/BinaryOptionMarketContract";
 // import { ethers } from "ethers";
 // import { SMART_CONTRACT_ADDRESS } from '../../configs/constants';
-import OptionMarket from "../../components/OptionMarket";
+import Customer from "../../components/Customer";
 import Owner from "../../components/Owner";
-
+import ListAddressOwner from "../../components/ListAddressOwner";
 const DEFAULT_SECOND = 30;
 
 export default function UpDownContainer() {
@@ -161,8 +161,9 @@ export default function UpDownContainer() {
 
   return (
     <>
-    {/* <OptionMarket/> */}
-    <Owner/>
+    {/* <Customer/>
+    <Owner/> */}
+    <ListAddressOwner/>
       {/* <Flex
         flex={1}
         w="100%"

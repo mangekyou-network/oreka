@@ -8,6 +8,7 @@ import { FaEthereum, FaWallet, FaTrophy } from 'react-icons/fa';
 import { ethers } from 'ethers';
 import { BigNumber } from 'ethers';
 import { motion, useAnimation } from 'framer-motion';
+import Owner from './Owner';
 import BinaryOptionMarket from '../../../out/BinaryOptionMarket.sol/BinaryOptionMarket.json';
 
 enum Side { Long, Short }
@@ -23,10 +24,11 @@ function OptionMarket() {
   const [selectedSide, setSelectedSide] = useState<Side | null>(null);
   const [walletAddress, setWalletAddress] = useState<string>("");
   const [balance, setBalance] = useState(0);
+  const [contractBalance, setContractBalance] = useState(0);
   const [accumulatedWinnings, setAccumulatedWinnings] = useState(0);
   const [bidAmount, setBidAmount] = useState("");
   const [currentPhase, setCurrentPhase] = useState<Phase>(Phase.Bidding);
-  const [positions, setPositions] = useState({ long: 0, short: 0 });
+  //const [positions, setPositions] = useState({ long: 0, short: 0 });
   const [totalDeposited, setTotalDeposited] = useState(0);
   const [strikePrice, setStrikePrice] = useState<number>(0);
   const [finalPrice, setFinalPrice] = useState<number>(0);
@@ -37,6 +39,7 @@ function OptionMarket() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [reward, setReward] = useState(0); // Số phần thưởng khi người chơi thắng
   const [contract, setContract] = useState<ethers.Contract | null>(null);
+  const [positions, setPositions] = useState<{ long: number; short: number }>({ long: 0, short: 0 });
 
   const [availableCoins] = useState<Coin[]>([
     { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "WIF/USD" },
@@ -46,7 +49,7 @@ function OptionMarket() {
 
   const toast = useToast();
   const priceControls = useAnimation();
-  const contractAddress = "0x4A679253410272dd5232B3Ff7cF5dbB88f295319";  // Địa chỉ contract của bạn
+  const contractAddress = "0x4c5859f0F772848b2D91F1D83E2Fe57935348029";  // Địa chỉ contract của bạn
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -65,6 +68,25 @@ function OptionMarket() {
     }, 5000); // Gọi hàm mỗi 5 giây
     return () => clearInterval(interval); // Clear interval khi component bị unmount
   }, [contract]);
+
+  useEffect(() => {
+    if (contractAddress) {
+        fetchContractBalance();
+    }
+}, [contractAddress]);
+
+useEffect(() => {
+  const fetchBalance = async () => {
+    if (walletAddress) {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const balanceWei = await provider.getBalance(walletAddress);
+      const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
+      setBalance(balanceEth);
+    }
+  };
+
+  fetchBalance();
+}, [walletAddress, contract]); 
   
   
 
@@ -129,6 +151,17 @@ function OptionMarket() {
       }
     }
   }, [contract]);
+
+  const fetchContractBalance = async () => {
+    try {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const contractBalanceWei = await provider.getBalance(contractAddress); 
+        const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei)); 
+        setContractBalance(contractBalanceEth); // Cập nhật vào state
+    } catch (error) {
+        console.error("Failed to fetch contract balance:", error); 
+    }
+};
 
   // Cập nhật trạng thái và thực hiện đếm ngược
   useEffect(() => {
@@ -245,12 +278,13 @@ function OptionMarket() {
       setBalance(prev => prev - Number(bidAmount));
       setPositions(prev => ({
         ...prev,
-        [Side[side].toLowerCase()]: prev[Side[side].toLowerCase()] + Number(bidAmount)
+        [Side[side].toLowerCase() as keyof typeof prev]: prev[Side[side].toLowerCase() as keyof typeof prev] + Number(bidAmount)
       }));
       setTotalDeposited(prev => prev + Number(bidAmount));
 
       // Chỉ gọi fetchMarketDetails khi cần thiết
       fetchMarketDetails();
+      await fetchContractBalance();
       setBidAmount("");
     } catch (error) {
       console.error("Error placing bid:", error);
@@ -293,6 +327,7 @@ function OptionMarket() {
         setTotalDeposited(0); 
         // Cập nhật lại bảng Long/Short
         await fetchMarketDetails(); // Gọi lại hàm để cập nhật thông tin
+        await fetchContractBalance();
 
 
         toast({
