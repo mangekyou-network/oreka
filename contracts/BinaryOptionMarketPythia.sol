@@ -2,10 +2,18 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import {ApolloReceiver} from "@orally-network/solidity-sdk/ApolloReceiver.sol";
 import "./OracleConsumer.sol";
+import {OrallyPythiaConsumer} from "@orally-network/solidity-sdk/OrallyPythiaConsumer.sol";
 
-contract BinaryOptionMarket is Ownable, ApolloReceiver {
+interface IFxPriceFeedExample {
+    function pair() external view returns (string memory);
+
+    function baseTokenAddr() external view returns (address);
+
+    function decimalPlaces() external view returns (uint256);
+}
+
+contract BinaryOptionMarket is OrallyPythiaConsumer, IFxPriceFeedExample {
     enum Side {
         Long,
         Short
@@ -45,6 +53,12 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     mapping(address => uint) public shortBids;
     mapping(address => bool) public hasClaimed;
 
+    uint256 public rate;
+    uint256 public lastUpdate;
+    string public pair;
+    address public baseTokenAddr;
+    uint256 public decimalPlaces;
+
     event Bid(Side side, address indexed account, uint value);
     event MarketResolved(uint256 finalPrice, uint timeStamp);
     event RewardClaimed(address indexed account, uint value);
@@ -56,9 +70,16 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         address _owner,
         address _executorsRegistry,
         address _apolloCoordinator,
+        address _pythiaRegistry,
+        string memory _pair,
+        address _baseTokenAddr,
+        uint256 _decimalPlaces,
         uint _strikePrice
-    ) Ownable(_owner) ApolloReceiver(_executorsRegistry, _apolloCoordinator) {
+    ) OrallyPythiaConsumer(_pythiaRegistry, _owner) {
         //priceFeed = OracleConsumer(_coprocessor);
+        pair = _pair;
+        baseTokenAddr = _baseTokenAddr;
+        decimalPlaces = _decimalPlaces;
         oracleDetails = OracleDetails(_strikePrice, _strikePrice);
         currentPhase = Phase.Bidding;
         transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
@@ -175,23 +196,10 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     // answer we're going to call it from the resolveMarket - NAIVE method
     function requestPriceFeed() internal {
         // Requesting the ICP/USD price feed with a specified callback gas limit
-        uint256 requestId = apolloCoordinator.requestDataFeed(
-            "ICP/USD",
-            300000
-        );
-    }
-
-    // Overriding the fulfillData function to handle incoming data
-    function fulfillData(bytes memory data) internal override {
-        (
-            uint256 _requestId,
-            string memory _dataFeedId,
-            uint256 _rate,
-            uint256 _decimals,
-            uint256 _timestamp
-        ) = abi.decode(data, (uint256, string, uint256, uint256, uint256));
-
-        resolveWithFulfilledData(_rate, _decimals, _timestamp);
+        // uint256 requestId = apolloCoordinator.requestDataFeed(
+        //     "ICP/USD",
+        //     300000
+        // );
     }
 
     function startTrading() external onlyOwner {
@@ -220,5 +228,23 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         }
 
         return price;
+    }
+
+    function updateRate(
+        string memory _pairId,
+        uint256 _rate,
+        uint256 _decimals,
+        uint256 _timestamp
+    ) external onlyExecutor(workflowId) {
+        rate = (_rate * (10 ** decimalPlaces)) / (10 ** _decimals); // normalise rate
+        lastUpdate = _timestamp;
+    }
+
+    function updateTime() external view returns (uint256) {
+        return lastUpdate;
+    }
+
+    function exchangeRate() external view returns (uint256) {
+        return rate;
     }
 }

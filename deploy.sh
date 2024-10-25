@@ -69,6 +69,10 @@ dfx canister install --wasm target/wasm32-unknown-unknown/release/chain_fusion.w
 # sleep for 3 seconds to allow the evm address to be generated
 sleep 3
 # safe the chain_fusion canisters evm address
+# EXAMPLE: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 export EVM_ADDRESS=$(dfx canister call chain_fusion get_evm_address | awk -F'"' '{print $2}')
 # deploy the contract passing the chain_fusion canisters evm address to receive the fees and create a couple of new jobs
 forge script script/Coprocessor.s.sol:MyScript --fork-url http://localhost:8545 --broadcast --sig "run(address)" $EVM_ADDRESS
+
+# deploy the contract on sepolia
+forge script script/Coprocessor.s.sol:MyScript --rpc-url https://eth-sepolia.g.alchemy.com/v2/SEem2zNMKSjcqvIsS9gm-_Lw9V5_Ckra --broadcast --sig "run(address)" $EVM_ADDRESS
