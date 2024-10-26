@@ -76,3 +76,6 @@ forge script script/Coprocessor.s.sol:MyScript --fork-url http://localhost:8545 
 
 # deploy the contract on sepolia
 forge script script/Coprocessor.s.sol:MyScript --rpc-url https://eth-sepolia.g.alchemy.com/v2/SEem2zNMKSjcqvIsS9gm-_Lw9V5_Ckra --broadcast --sig "run(address)" $EVM_ADDRESS
+
+# test the contract
+cast send $EVM_ADDRESS "startTrading()" 1000000000000000000 --rpc-url http://localhost:8545 --private-key $PRIVATE_KEY

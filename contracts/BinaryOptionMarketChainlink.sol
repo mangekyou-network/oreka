@@ -22,36 +22,6 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  * page for details.
  */
 
-contract DataConsumerV3 {
-    AggregatorV3Interface internal dataFeed;
-
-    /**
-     * Network: Sepolia
-     * Aggregator: BTC/USD
-     * Address: 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43
-     */
-    constructor() {
-        dataFeed = AggregatorV3Interface(
-            0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43
-        );
-    }
-
-    /**
-     * Returns the latest answer.
-     */
-    function getChainlinkDataFeedLatestAnswer() public view returns (int) {
-        // prettier-ignore
-        (
-            /* uint80 roundID */,
-            int answer,
-            /*uint startedAt*/,
-            /*uint timeStamp*/,
-            /*uint80 answeredInRound*/
-        ) = dataFeed.latestRoundData();
-        return answer;
-    }
-}
-
 contract BinaryOptionMarket is Ownable {
     enum Side {
         Long,
@@ -65,8 +35,8 @@ contract BinaryOptionMarket is Ownable {
     }
 
     struct OracleDetails {
-        uint strikePrice;
-        uint256 finalPrice;
+        int strikePrice;
+        int finalPrice;
     }
 
     struct Position {
@@ -95,7 +65,7 @@ contract BinaryOptionMarket is Ownable {
     mapping(address => bool) public hasClaimed;
 
     event Bid(Side side, address indexed account, uint value);
-    event MarketResolved(uint256 finalPrice, uint timeStamp);
+    event MarketResolved(int finalPrice, uint timeStamp);
     event RewardClaimed(address indexed account, uint value);
     event Withdrawal(address indexed user, uint amount);
 
@@ -104,7 +74,7 @@ contract BinaryOptionMarket is Ownable {
     constructor(
         address _owner,
         address _priceFeedAddress,
-        uint _strikePrice
+        int _strikePrice
     ) Ownable(_owner) {
         dataFeed = AggregatorV3Interface(_priceFeedAddress);
         oracleDetails = OracleDetails(_strikePrice, _strikePrice);
@@ -142,7 +112,6 @@ contract BinaryOptionMarket is Ownable {
             /*uint startedAt*/ uint timeStamp /*uint80 answeredInRound*/,
 
         ) = dataFeed.latestRoundData();
-        return answer;
 
         resolveWithFulfilledData(answer, timeStamp);
     }
@@ -153,11 +122,10 @@ contract BinaryOptionMarket is Ownable {
 
         int finalPrice = _rate;
         uint updatedAt = _timestamp;
-        oracleDetails.finalPrice = finalPrice;
 
         resolved = true;
         currentPhase = Phase.Maturity;
-
+        oracleDetails.finalPrice = finalPrice;
         emit MarketResolved(finalPrice, updatedAt);
 
         Side winningSide;
@@ -175,7 +143,7 @@ contract BinaryOptionMarket is Ownable {
         require(resolved, "Market is not resolved yet");
         require(!hasClaimed[msg.sender], "Reward already claimed");
 
-        uint finalPrice = oracleDetails.finalPrice;
+        int finalPrice = oracleDetails.finalPrice;
 
         Side winningSide;
         if (finalPrice >= oracleDetails.strikePrice) {
@@ -228,26 +196,13 @@ contract BinaryOptionMarket is Ownable {
 
     // question how should we call this frequently?
     // answer we're going to call it from the resolveMarket - NAIVE method
-    function requestPriceFeed() internal {
-        // Requesting the ICP/USD price feed with a specified callback gas limit
-        uint256 requestId = apolloCoordinator.requestDataFeed(
-            "ICP/USD",
-            300000
-        );
-    }
-
-    // Overriding the fulfillData function to handle incoming data
-    function fulfillData(bytes memory data) internal override {
-        (
-            uint256 _requestId,
-            string memory _dataFeedId,
-            uint256 _rate,
-            uint256 _decimals,
-            uint256 _timestamp
-        ) = abi.decode(data, (uint256, string, uint256, uint256, uint256));
-
-        resolveWithFulfilledData(_rate, _decimals, _timestamp);
-    }
+    // function requestPriceFeed() internal {
+    //     // Requesting the ICP/USD price feed with a specified callback gas limit
+    //     uint256 requestId = apolloCoordinator.requestDataFeed(
+    //         "ICP/USD",
+    //         300000
+    //     );
+    // }
 
     function startTrading() external onlyOwner {
         require(currentPhase == Phase.Bidding, "Market not in bidding phase");
@@ -275,5 +230,21 @@ contract BinaryOptionMarket is Ownable {
         }
 
         return price;
+    }
+
+    function getFinalPrice() public view returns (int) {
+        return oracleDetails.finalPrice;
+    }
+
+    function getChainlinkDataFeedLatestAnswer() public view returns (int) {
+        // prettier-ignore
+        (
+            /* uint80 roundID */,
+            int answer,
+            /*uint startedAt*/,
+            /*uint timeStamp*/,
+            /*uint80 answeredInRound*/
+        ) = dataFeed.latestRoundData();
+        return answer;
     }
 }

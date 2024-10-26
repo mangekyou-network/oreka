@@ -12,8 +12,10 @@ import Cycles "mo:base/ExperimentalCycles";
 import Array "mo:base/Array";
 import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
+import Nat32 "mo:base/Nat32";
 import Text "mo:base/Text";
 import Iter "mo:base/Iter";
+import Char "mo:base/Char";
 
 import Types "Types";
 
@@ -76,39 +78,97 @@ actor BinaryOptionMarket {
         transformed;
     };
 
-    private func get_icp_usd_exchange() : async Float {
+    public func get_icp_usd_exchange() : async Text {
+
+        //1. DECLARE IC MANAGEMENT CANISTER
+        //We need this so we can use it to make the HTTP request
         let ic : Types.IC = actor ("aaaaa-aa");
 
+        //2. SETUP ARGUMENTS FOR HTTP GET request
+
+        // 2.1 Setup the URL and its query parameters
         let ONE_MINUTE : Nat64 = 60;
-        let current_time : Nat64 = Nat64.fromIntWrap(Time.now());
-        let start_timestamp : Types.Timestamp = current_time - ONE_MINUTE;
-        let end_timestamp : Types.Timestamp = current_time;
+        let start_timestamp : Types.Timestamp = 1682978460; //May 1, 2023 22:01:00 GMT
+        let end_timestamp : Types.Timestamp = 1682978520;//May 1, 2023 22:02:00 GMT
         let host : Text = "api.exchange.coinbase.com";
-        let url = "https://" # host # "/products/ICP-USD/candles?start=" # Nat64.toText(start_timestamp) # "&end=" # Nat64.toText(end_timestamp) # "&granularity=" # Nat64.toText(ONE_MINUTE);
+        let url = "https://" # host # "/products/ICP-USD/candles?start=" # Nat64.toText(start_timestamp) # "&end=" # Nat64.toText(start_timestamp) # "&granularity=" # Nat64.toText(ONE_MINUTE);
 
-        // ... giữ nguyên phần này ...
+        // 2.2 prepare headers for the system http_request call
+        let request_headers = [
+            { name = "Host"; value = host # ":443" },
+            { name = "User-Agent"; value = "exchange_rate_canister" },
+        ];
 
+        // 2.2.1 Transform context
+        let transform_context : Types.TransformContext = {
+        function = transform;
+        context = Blob.fromArray([]);
+        };
+
+        // 2.3 The HTTP request
+        let http_request : Types.HttpRequestArgs = {
+            url = url;
+            max_response_bytes = null; //optional for request
+            headers = request_headers;
+            body = null; //optional for request
+            method = #get;
+            transform = ?transform_context;
+        };
+
+        //3. ADD CYCLES TO PAY FOR HTTP REQUEST
+
+        //The IC specification spec says, "Cycles to pay for the call must be explicitly transferred with the call"
+        //IC management canister will make the HTTP request so it needs cycles
+        //See: https://internetcomputer.org/docs/current/motoko/main/cycles
+        
+        //The way Cycles.add() works is that it adds those cycles to the next asynchronous call
+        //"Function add(amount) indicates the additional amount of cycles to be transferred in the next remote call"
+        //See: https://internetcomputer.org/docs/current/references/ic-interface-spec/#ic-http_request
         Cycles.add<system>(230_949_972_000);
         
+        //4. MAKE HTTPS REQUEST AND WAIT FOR RESPONSE
+        //Since the cycles were added above, we can just call the IC management canister with HTTPS outcalls below
         let http_response : Types.HttpResponsePayload = await ic.http_request(http_request);
         
+        //5. DECODE THE RESPONSE
+
+        //As per the type declarations in `src/Types.mo`, the BODY in the HTTP response 
+        //comes back as [Nat8s] (e.g. [2, 5, 12, 11, 23]). Type signature:
+        
+        //public type HttpResponsePayload = {
+        //     status : Nat;
+        //     headers : [HttpHeader];
+        //     body : [Nat8];
+        // };
+
+        //We need to decode that [Nat8] array that is the body into readable text. 
+        //To do this, we:
+        //  1. Convert the [Nat8] into a Blob
+        //  2. Use Blob.decodeUtf8() method to convert the Blob to a ?Text optional 
+        //  3. We use a switch to explicitly call out both cases of decoding the Blob into ?Text
         let response_body: Blob = Blob.fromArray(http_response.body);
         let decoded_text: Text = switch (Text.decodeUtf8(response_body)) {
             case (null) { "No value returned" };
             case (?y) { y };
         };
 
-        // Phân tích chuỗi JSON để lấy giá đóng cửa
-        let price_text = switch (Iter.toArray(Text.split(decoded_text, #text(",")))[4]) {
-            case (?value) { Text.trim(value, #text("[]")) };
-            case (null) { "0" };
-        };
-        let price : Float = switch (Float.fromText(price_text)) {
-            case (?p) { p };
-            case (null) { 0 };
-        };
+        //6. RETURN RESPONSE OF THE BODY
+        //The API response will looks like this:
 
-        price
+        // ("[[1682978460,5.714,5.718,5.714,5.714,243.5678]]")
+
+        //Which can be formatted as this
+        //  [
+        //     [
+        //         1682978460, <-- start/timestamp
+        //         5.714, <-- low
+        //         5.718, <-- high
+        //         5.714, <-- open
+        //         5.714, <-- close
+        //         243.5678 <-- volume
+        //     ],
+        // ]
+        decoded_text
     };
 
     // Các sự kiện được thay thế bằng các hàm ghi log
@@ -152,13 +212,13 @@ actor BinaryOptionMarket {
         assert(currentPhase == #Trading);
 
         let price = await get_icp_usd_exchange();
-        let finalPrice = Int.abs(Float.toInt(price * 100)); // Chuyển đổi thành số nguyên không âm, giả sử 2 chữ số thập phân
+        let finalPrice = await textToNat(price);
         
-        resolveWithFulfilledData(Nat.fromNat32(Nat32.fromIntWrap(finalPrice)), 100, Time.now());
+        resolveWithFulfilledData(finalPrice, Time.now());
     };
 
-    private func resolveWithFulfilledData(rate : Nat, decimals : Nat, timestamp : Int) {
-        let finalPrice = rate / decimals;
+    private func resolveWithFulfilledData(rate : Nat, timestamp : Int) {
+        let finalPrice = rate;
         oracleDetails := { strikePrice = oracleDetails.strikePrice; finalPrice = finalPrice };
 
         resolved := true;
@@ -228,5 +288,19 @@ actor BinaryOptionMarket {
         assert(currentPhase == #Maturity);
         assert(resolved);
         currentPhase := #Expiry;
+    };
+
+    private func textToNat(txt : Text) : async (Nat) {
+        assert(txt.size() > 0);
+        let chars = txt.chars();
+
+        var num : Nat = 0;
+        for (v in chars){
+            let charToNum = Nat32.toNat(Char.toNat32(v)-48);
+            assert(charToNum >= 0 and charToNum <= 9);
+            num := num * 10 +  charToNum;          
+        };
+
+        num;
     };
 };

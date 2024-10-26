@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
 import "../contracts/OracleConsumer.sol";
-import "../contracts/BinaryOptionMarketPythia.sol";
+import "../contracts/BinaryOptionMarketChainlink.sol";
 
 contract MyScript is Script {
     function run(address chain_fusion_canister_address) external {
@@ -30,12 +30,7 @@ contract MyScript is Script {
         // demo example: define strikePrice for WIF/USD pair at 1.66USD and owner will call the resolveMarket() around August 13th 2024.
         BinaryOptionMarket binaryOptionMarket = new BinaryOptionMarket(
             ownerPublicKey,
-            0x4531112808f8C0068768cC3fAE0939e0c05719D1,
-            0xDC88B1919AF3AD86AAcE0FB19F125cb3Db3543e2,
-            0x76d67e374391DF6363B72dA8530035Ee5f27a3Da,
-            "ETH/USD",
-            0x76d67e374391DF6363B72dA8530035Ee5f27a3Da,
-            18,
+            0xc0F82A46033b8BdBA4Bb0B0e28Bc2006F64355bC,
             166000
         );
 
