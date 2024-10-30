@@ -1,12 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-
 import "@openzeppelin/contracts/access/Ownable.sol";
-import {ApolloReceiver} from "@orally-network/solidity-sdk/ApolloReceiver.sol";
 import "./OracleConsumer.sol";
 
-contract BinaryOptionMarket is Ownable, ApolloReceiver {
+import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+
+/**
+ * THIS IS AN EXAMPLE CONTRACT THAT USES HARDCODED
+ * VALUES FOR CLARITY.
+ * THIS IS AN EXAMPLE CONTRACT THAT USES UN-AUDITED CODE.
+ * DO NOT USE THIS CODE IN PRODUCTION.
+ */
+
+/**
+ * If you are reading data feeds on L2 networks, you must
+ * check the latest answer from the L2 Sequencer Uptime
+ * Feed to ensure that the data is accurate in the event
+ * of an L2 sequencer outage. See the
+ * https://docs.chain.link/data-feeds/l2-sequencer-feeds
+ * page for details.
+ */
+
+contract BinaryOptionMarket is Ownable {
     enum Side {
         Long,
         Short
@@ -19,8 +35,8 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     }
 
     struct OracleDetails {
-        uint strikePrice;
-        uint256 finalPrice;
+        int strikePrice;
+        int finalPrice;
     }
 
     struct Position {
@@ -36,6 +52,8 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
 
     OracleDetails public oracleDetails;
     OracleConsumer internal priceFeed;
+    AggregatorV3Interface internal dataFeed;
+
     Position public positions;
     MarketFees public fees;
     uint public totalDeposited;
@@ -47,7 +65,7 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     mapping(address => bool) public hasClaimed;
 
     event Bid(Side side, address indexed account, uint value);
-    event MarketResolved(uint256 finalPrice, uint timeStamp);
+    event MarketResolved(int finalPrice, uint timeStamp);
     event RewardClaimed(address indexed account, uint value);
     event Withdrawal(address indexed user, uint amount);
 
@@ -55,25 +73,17 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     // FUCK!
     constructor(
         address _owner,
-
-        address _executorsRegistry,
-        address _apolloCoordinator,
-        uint _strikePrice
-    ) Ownable(_owner) ApolloReceiver(_executorsRegistry, _apolloCoordinator) {
-        //priceFeed = OracleConsumer(_coprocessor);
+        address _priceFeedAddress,
+        int _strikePrice
+    ) Ownable(_owner) {
+        dataFeed = AggregatorV3Interface(_priceFeedAddress);
         oracleDetails = OracleDetails(_strikePrice, _strikePrice);
-
         currentPhase = Phase.Bidding;
         transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
     }
 
-     function setStrikePrice(uint _strikePrice) external onlyOwner {
-        oracleDetails.strikePrice = _strikePrice;
-    }
-
-
     function bid(Side side) public payable {
-        require(currentPhase == Phase.Trading, "Not in Trading phase");
+        require(currentPhase == Phase.Bidding, "Not in bidding phase");
         require(msg.value > 0, "Value must be greater than zero");
 
         if (side == Side.Long) {
@@ -93,25 +103,29 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         require(currentPhase == Phase.Trading, "Market not in trading phase");
 
         // Get the price from the smart contract itself
-        requestPriceFeed();
+        // requestPriceFeed();
+
+        (
+            ,
+            /* uint80 roundID */ int answer,
+            ,
+            /*uint startedAt*/ uint timeStamp /*uint80 answeredInRound*/,
+
+        ) = dataFeed.latestRoundData();
+
+        resolveWithFulfilledData(answer, timeStamp);
     }
 
-    function resolveWithFulfilledData(
-        uint256 _rate,
-        uint256 _decimals,
-        uint256 _timestamp
-    ) internal {
+    function resolveWithFulfilledData(int _rate, uint256 _timestamp) internal {
         // Parse price from string to uint
         // uint finalPrice = parsePrice(oracleDetails.finalPrice);
 
-        uint256 finalPrice = _rate / _decimals;
+        int finalPrice = _rate;
         uint updatedAt = _timestamp;
-        oracleDetails.finalPrice = finalPrice;
 
         resolved = true;
         currentPhase = Phase.Maturity;
-
-
+        oracleDetails.finalPrice = finalPrice;
         emit MarketResolved(finalPrice, updatedAt);
 
         Side winningSide;
@@ -121,7 +135,6 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
             winningSide = Side.Short;
         }
 
-
         emit MarketOutcome(winningSide, address(0), true);
     }
 
@@ -130,7 +143,7 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         require(resolved, "Market is not resolved yet");
         require(!hasClaimed[msg.sender], "Reward already claimed");
 
-        uint finalPrice = oracleDetails.finalPrice;
+        int finalPrice = oracleDetails.finalPrice;
 
         Side winningSide;
         if (finalPrice >= oracleDetails.strikePrice) {
@@ -147,14 +160,12 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
             userDeposit = longBids[msg.sender];
             totalWinningDeposits = positions.long;
             if (userDeposit > 0) {
-
                 isWinner = true; // Người dùng thắng
             }
         } else {
             userDeposit = shortBids[msg.sender];
             totalWinningDeposits = positions.short;
             if (userDeposit > 0) {
-
                 isWinner = true; // Người dùng thắng
             }
         }
@@ -174,33 +185,24 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         emit RewardClaimed(msg.sender, finalReward);
     }
 
-
     function withdraw() public onlyOwner {
-    uint amount = address(this).balance;
-    require(amount > 0, "No balance to withdraw.");
-    payable(msg.sender).transfer(amount);
-}
+        uint amount = address(this).balance;
+        require(amount > 0, "No balance to withdraw.");
 
-    function requestPriceFeed() internal {
-        // Requesting the ICP/USD price feed with a specified callback gas limit
-        uint256 requestId = apolloCoordinator.requestDataFeed(
-            "ICP/USD",
-            300000
-        );
+        payable(msg.sender).transfer(amount);
+
+        emit Withdrawal(msg.sender, amount);
     }
 
-    // Overriding the fulfillData function to handle incoming data
-    function fulfillData(bytes memory data) internal override {
-        (
-            uint256 _requestId,
-            string memory _dataFeedId,
-            uint256 _rate,
-            uint256 _decimals,
-            uint256 _timestamp
-        ) = abi.decode(data, (uint256, string, uint256, uint256, uint256));
-
-        resolveWithFulfilledData(_rate, _decimals, _timestamp);
-    }
+    // question how should we call this frequently?
+    // answer we're going to call it from the resolveMarket - NAIVE method
+    // function requestPriceFeed() internal {
+    //     // Requesting the ICP/USD price feed with a specified callback gas limit
+    //     uint256 requestId = apolloCoordinator.requestDataFeed(
+    //         "ICP/USD",
+    //         300000
+    //     );
+    // }
 
     function startTrading() external onlyOwner {
         require(currentPhase == Phase.Bidding, "Market not in bidding phase");
@@ -216,7 +218,6 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     function parsePrice(
         string memory priceString
     ) internal pure returns (uint) {
-
         bytes memory priceBytes = bytes(priceString);
         uint price = 0;
 
@@ -229,5 +230,21 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         }
 
         return price;
+    }
+
+    function getFinalPrice() public view returns (int) {
+        return oracleDetails.finalPrice;
+    }
+
+    function getChainlinkDataFeedLatestAnswer() public view returns (int) {
+        // prettier-ignore
+        (
+            /* uint80 roundID */,
+            int answer,
+            /*uint startedAt*/,
+            /*uint timeStamp*/,
+            /*uint80 answeredInRound*/
+        ) = dataFeed.latestRoundData();
+        return answer;
     }
 }
