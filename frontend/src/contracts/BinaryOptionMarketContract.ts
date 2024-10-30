@@ -2,13 +2,10 @@
 import { ethers } from "ethers";
 import { ILatestRound, IBidResult } from "../types";
 import { OPTION_SIDE } from "./types";
-
-
 // import { BaseInterface } from "./interfaces";
 // import BINARY_OPTION_MARKET_ABI from "./abis/BinaryOptionMarketABI.json";
 // import ContractABI from "./abis/BinaryOptionMarketABI.json";
 // import ContractBalance from '../components/Contractbalance';
-
   // Method to get the latest round data
   class BinaryOptionMarketContract {
     latestRoundDataAsync = async (): Promise<ILatestRound> => {

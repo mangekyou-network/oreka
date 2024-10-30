@@ -55,15 +55,22 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     // FUCK!
     constructor(
         address _owner,
+
         address _executorsRegistry,
         address _apolloCoordinator,
         uint _strikePrice
     ) Ownable(_owner) ApolloReceiver(_executorsRegistry, _apolloCoordinator) {
         //priceFeed = OracleConsumer(_coprocessor);
         oracleDetails = OracleDetails(_strikePrice, _strikePrice);
+
         currentPhase = Phase.Bidding;
         transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
     }
+
+     function setStrikePrice(uint _strikePrice) external onlyOwner {
+        oracleDetails.strikePrice = _strikePrice;
+    }
+
 
     function bid(Side side) public payable {
         require(currentPhase == Phase.Trading, "Not in Trading phase");
@@ -104,6 +111,7 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         resolved = true;
         currentPhase = Phase.Maturity;
 
+
         emit MarketResolved(finalPrice, updatedAt);
 
         Side winningSide;
@@ -112,6 +120,7 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         } else {
             winningSide = Side.Short;
         }
+
 
         emit MarketOutcome(winningSide, address(0), true);
     }
@@ -138,12 +147,14 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
             userDeposit = longBids[msg.sender];
             totalWinningDeposits = positions.long;
             if (userDeposit > 0) {
+
                 isWinner = true; // Người dùng thắng
             }
         } else {
             userDeposit = shortBids[msg.sender];
             totalWinningDeposits = positions.short;
             if (userDeposit > 0) {
+
                 isWinner = true; // Người dùng thắng
             }
         }
@@ -163,9 +174,13 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         emit RewardClaimed(msg.sender, finalReward);
     }
 
+
     function withdraw() public onlyOwner {
-        uint amount = address(this).balance;
-        require(amount > 0, "No balance to withdraw.");
+    uint amount = address(this).balance;
+    require(amount > 0, "No balance to withdraw.");
+    payable(msg.sender).transfer(amount);
+}
+
 
 
         payable(msg.sender).transfer(amount);
@@ -209,6 +224,7 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     function parsePrice(
         string memory priceString
     ) internal pure returns (uint) {
+
         bytes memory priceBytes = bytes(priceString);
         uint price = 0;
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, Text, Button, VStack, useToast, Input, 
@@ -115,6 +116,7 @@ const OwnerUI = () => {
         isClosable: true,
       });
     } catch (error) {
+
       console.error("Error deploying contract:", error);
       toast({
         title: "Error deploying contract",
@@ -125,7 +127,6 @@ const OwnerUI = () => {
       });
     }
   };
-  
 
   // Chuyển đổi trạng thái từ Bidding sang Trading
   const startTrading = async () => {
@@ -184,6 +185,7 @@ const OwnerUI = () => {
     color="#FEDF56"
     fontFamily="Arial, sans-serif">
       {/* Ẩn nút Connect nếu đã kết nối */}
+>>>>>>> main
       {!isWalletConnected ? (
         <Button 
           onClick={connectWallet} 
@@ -226,7 +228,6 @@ const OwnerUI = () => {
           </Button>
         </HStack>
       </SimpleGrid>
-
       <SimpleGrid columns={3} spacing={20} my={8}>
         <Button 
           size="lg" 
@@ -256,7 +257,6 @@ const OwnerUI = () => {
             Expire
         </Button>
       </SimpleGrid>
-
       {contractAddress && (
         <Box>
           <Text color="white">Predicted Contract Address: {contractAddress}</Text>
