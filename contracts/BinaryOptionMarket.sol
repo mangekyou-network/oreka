@@ -181,6 +181,14 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     payable(msg.sender).transfer(amount);
 }
 
+
+
+        payable(msg.sender).transfer(amount);
+        emit Withdrawal(msg.sender, amount);
+    }
+
+    // question how should we call this frequently?
+    // answer we're going to call it from the resolveMarket - NAIVE method
     function requestPriceFeed() internal {
         // Requesting the ICP/USD price feed with a specified callback gas limit
         uint256 requestId = apolloCoordinator.requestDataFeed(

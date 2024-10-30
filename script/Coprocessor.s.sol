@@ -8,6 +8,7 @@ import "../contracts/BinaryOptionMarketChainlink.sol";
 contract MyScript is Script {
     function run(address chain_fusion_canister_address) external {
         // the private key of the deployer is the first private key printed by running anvil
+
         uint256 deployerPrivateKey = 0x2ad3e29873166ca988150e65c1ec355015cf423197b100ebd63ed6d28e269966;
         address ownerPublicKey = 0xc4A68589759A1403c5F3754Aa889656E9A96f49e;
         // we use that key to broadcast all following transactions
@@ -33,7 +34,6 @@ contract MyScript is Script {
             0xc0F82A46033b8BdBA4Bb0B0e28Bc2006F64355bC,
             166000
         );
-
         vm.stopBroadcast();
     }
 }

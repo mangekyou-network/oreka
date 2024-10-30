@@ -1,20 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { ethers } from 'ethers';
-import { Box, Button, Input, VStack, useToast, HStack, Icon, SimpleGrid, Text } from '@chakra-ui/react';
-import { FaEthereum, FaWallet } from 'react-icons/fa';
-import BinaryOptionMarket from '../../../out/BinaryOptionMarket.sol/BinaryOptionMarket.json';
-import Factory from '../contracts/abis/FactoryABI.json';  // ABI của Factory contract
 
-const Owner = () => {
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Box, Text, Button, VStack, useToast, Input, 
+  HStack, Icon, SimpleGrid
+} from '@chakra-ui/react';
+import { FaEthereum, FaWallet, FaTrophy } from 'react-icons/fa';
+import { ethers } from 'ethers';
+import Factory from '../../../out/Factory.sol/Factory.json';  // ABI của Factory contract
+
+const OwnerUI = () => {
   const [contractAddress, setContractAddress] = useState('');
   const [strikePrice, setStrikePrice] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
   const [balance, setBalance] = useState('');
-  const [contractBalance, setContractBalance] = useState(''); 
+  const [bytecode, setBytecode] = useState(Factory.bytecode);
   const [isWalletConnected, setIsWalletConnected] = useState(false);
 
-  const FactoryAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-  
+  const FactoryAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
   const toast = useToast();  // Sử dụng useToast
 
   // Kết nối Metamask
@@ -28,17 +31,17 @@ const Owner = () => {
         const balanceWei = await provider.getBalance(address);
         const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
         setWalletAddress(address);
-        setBalance(balanceEth.toString());
+        setBalance(balanceEth);
         setIsWalletConnected(true);
         
         toast({
           title: "Wallet connected successfully!",
           description: `Address: ${shortenAddress(address)}`,
-          variant: "success",
+          status: "success",
           duration: 3000,
           isClosable: true,
         });
-      } catch (error: any) {
+      } catch (error) {
         console.error("Failed to connect wallet:", error);
         toast({
           title: "Failed to connect wallet",
@@ -60,55 +63,64 @@ const Owner = () => {
   };
 
   // Rút gọn địa chỉ ví
-  const shortenAddress = (address: string) => {
+  const shortenAddress = (address) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  // Triển khai hợp đồng với CREATE2
-    // Triển khai hợp đồng với CREATE2
-// Triển khai hợp đồng với CREATE2
+  // const bytecodetwo = Factory.bytecode;
+
   const deployContract = async () => {
     try {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
-      
-      // Tạo đối tượng ContractFactory từ bytecode và ABI của hợp đồng
-      const factory = new ethers.ContractFactory(BinaryOptionMarket.abi, BinaryOptionMarket.bytecode, signer);
-      
-      // Chuyển đổi strikePrice thành số
-      const strikePriceValue = parseFloat(strikePrice);
-      if (isNaN(strikePriceValue)) {
-        throw new Error("Invalid strike price");
-      }
-
+      const factoryContract = new ethers.Contract(FactoryAddress, Factory.abi, signer);
+    
       // Salt ngẫu nhiên
       const randomSalt = ethers.utils.hexlify(ethers.utils.randomBytes(32));
+      console.log('Random Salt:', randomSalt);
+    
+      // Kiểm tra bytecode
+      console.log('Bytecode:', typeof bytecode, bytecode);  // Kiểm tra và in giá trị bytecode
       
-      console.log("Wallet Address:", walletAddress);
-      console.log("Strike Price Value:", strikePriceValue);
-      console.log("Random Salt:", randomSalt);
-
-      // Triển khai hợp đồng
-      const contract = await factory.deploy(walletAddress, strikePriceValue); // Triển khai hợp đồng với tham số constructor
-      await contract.deployed();
+      // Thêm bước xử lý bytecode
+      let checkedBytecode = bytecode;
       
-      console.log("Contract deployed at:", contract.address);
+      if (typeof checkedBytecode !== 'string') {
+        checkedBytecode = checkedBytecode.object;  // Nếu nó là một đối tượng, lấy thuộc tính chuỗi hex từ đó
+      }
       
-      setContractAddress(contract.address);
-
-      // Hiển thị thông báo thành công
+      // Đảm bảo rằng bytecode có tiền tố '0x'
+      if (!checkedBytecode.startsWith('0x')) {
+        checkedBytecode = '0x' + checkedBytecode;
+      }
+  
+      // Kiểm tra lại bytecode cuối cùng
+      if (typeof checkedBytecode !== 'string' || !checkedBytecode.startsWith('0x')) {
+        throw new Error("Bytecode must be a valid hex string starting with '0x'");
+      }
+      
+      // Triển khai hợp đồng với bytecode đã kiểm tra
+      const tx = await factoryContract.deploy(ethers.utils.keccak256(randomSalt), checkedBytecode); // Sử dụng bytecode đã kiểm tra
+      await tx.wait();
+      
+      // Lấy địa chỉ hợp đồng mới triển khai
+      const deployedAddress = await factoryContract.getAddress(ethers.utils.keccak256(randomSalt), checkedBytecode);
+      setContractAddress(deployedAddress);
+      
+      // Hiển thị thông báo
       toast({
         title: "Contract deployed successfully!",
-        description: `Contract deployed at: ${contract.address}`,
+        description: `Contract deployed at: ${deployedAddress}`,
         status: "success",
         duration: 5000,
         isClosable: true,
       });
     } catch (error) {
-      console.error("Failed to deploy contract:", error);
+
+      console.error("Error deploying contract:", error);
       toast({
-        title: "Failed to deploy contract",
-        description: error.message || "An unexpected error occurred.",
+        title: "Error deploying contract",
+        description: error.message,
         status: "error",
         duration: 5000,
         isClosable: true,
@@ -118,189 +130,82 @@ const Owner = () => {
 
   // Chuyển đổi trạng thái từ Bidding sang Trading
   const startTrading = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const factoryContract = new ethers.Contract(FactoryAddress, Factory.abi, signer);
 
-      const tx = await binaryOptionMarketContract.startTrading();
-      await tx.wait();
-
-      toast({
-        title: "Trading started!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error("Failed to start trading:", error);
-      toast({
-        title: "Failed to start trading",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
+    await factoryContract.startTrading();
+    toast({
+      title: "Trading started!",
+      status: "success",
+      duration: 3000,
+      isClosable: true,
+    });
   };
 
   // Chuyển đổi trạng thái từ Trading sang Maturity
   const resolveMarket = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const factoryContract = new ethers.Contract(FactoryAddress, Factory.abi, signer);
 
-      const tx = await binaryOptionMarketContract.resolveMarket();
-      await tx.wait();
-
-      toast({
-        title: "Market resolved!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error("Failed to resolve market:", error);
-      toast({
-        title: "Failed to resolve market",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
+    await factoryContract.resolveMarket();
+    toast({
+      title: "Market resolved!",
+      status: "success",
+      duration: 3000,
+      isClosable: true,
+    });
   };
 
   // Chuyển đổi trạng thái từ Maturity sang Expiry
   const expireMarket = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const factoryContract = new ethers.Contract(FactoryAddress, Factory.abi, signer);
 
-      const tx = await binaryOptionMarketContract.expireMarket();
-      await tx.wait();
-
-      toast({
-        title: "Market expired!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error("Failed to expire market:", error);
-      toast({
-        title: "Failed to expire market",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
+    await factoryContract.expireMarket();
+    toast({
+      title: "Market expired!",
+      status: "success",
+      duration: 3000,
+      isClosable: true,
+    });
   };
 
-  // Cập nhật giá strike
-  const updateStrikePrice = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
-
-      const tx = await binaryOptionMarketContract.setStrikePrice(strikePrice);
-      await tx.wait();
-
-      toast({
-        title: "Strike price updated!",
-        description: `New strike price: ${strikePrice}`,
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error("Failed to update strike price:", error);
-      toast({
-        title: "Failed to update strike price",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-  
-  const fetchContractBalance = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-
-      const contractBalanceWei = await provider.getBalance(contractAddress);
-      const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei));
-      setContractBalance(contractBalanceEth.toFixed(4));
-    } catch (error) {
-      console.error("Failed to fetch contract balance:", error);
-    }
+  const abbreviateAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  const withdraw = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
-
-      const tx = await binaryOptionMarketContract.withdraw();
-      await tx.wait();
-
-      toast({
-        title: "Withdrawal successful!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-      fetchContractBalance(); // Cập nhật lại số dư sau khi rút
-    } catch (error: any) {
-      console.error("Failed to withdraw:", error);
-      toast({
-        title: "Failed to withdraw",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (contractAddress) {
-      fetchContractBalance();
-    }
-  }, [contractAddress]);
-
-   return (
-    <VStack color="#FEDF56" fontFamily="Arial, sans-serif">
+  return (
+    <VStack 
+    // width={{ base: '90%', md: '700px' }}
+    // spacing={8}
+    // align="stretch"
+    color="#FEDF56"
+    fontFamily="Arial, sans-serif">
+      {/* Ẩn nút Connect nếu đã kết nối */}
+>>>>>>> main
       {!isWalletConnected ? (
         <Button 
           onClick={connectWallet} 
           colorScheme="teal" 
-
           size="lg" 
           p={6}
           _hover={{ bg: "teal.500", transform: "scale(1.05)" }}>
             Connect Wallet
         </Button>
       ) : (
-
         <HStack spacing={4} justify="space-between" width="500px" color="#FF6B6B">
             <HStack>
               <Icon as={FaWallet} />
-              <Text>{shortenAddress(walletAddress)}</Text>
+              <Text>{abbreviateAddress(walletAddress)}</Text>
             </HStack>
             <HStack>
               <Icon as={FaEthereum} />
               <Text>{parseFloat(balance).toFixed(4)} ETH</Text>
             </HStack>
-
           </HStack>
-
       )}
 
       <SimpleGrid columns={1}>
@@ -308,7 +213,7 @@ const Owner = () => {
           <Input
             placeholder="Strike Price"
             value={strikePrice}
-            onChange={(e) => setStrikePrice(Number(e.target.value))}
+            onChange={(e) => setStrikePrice(e.target.value)}
             width={350}
             bg="gray.800"
             color="white"
@@ -323,37 +228,6 @@ const Owner = () => {
           </Button>
         </HStack>
       </SimpleGrid>
-
-      {contractAddress && (
-        <>
-          <SimpleGrid spacing={20} my={8}>
-            <VStack justify="center" alignItems="center" my={10}>
-            <HStack>
-              <Text fontSize="xl" color="white">Contract Address:</Text>
-              <Text fontSize="xl" color="white">{contractAddress}</Text>
-            </HStack>
-            <HStack>
-                <Text fontSize="xl" color="white">Contract Balance:</Text>
-                <Text fontSize="xl" color="white">{contractBalance} ETH</Text>
-              </HStack>
-            </VStack>
-          </SimpleGrid>
-
-          {/* Chỉ hiển thị nút Withdraw nếu Contract Balance khác 0 */}
-          {contractBalance !== '0.0000' && (
-            <Button 
-              size="lg" 
-              w="200px" 
-              p={6} 
-              colorScheme="orange"
-              _hover={{ bg: "orange.600", transform: "scale(1.05)" }}
-              onClick={withdraw}>
-                Withdraw
-            </Button>
-          )}
-        </>
-      )}
-
       <SimpleGrid columns={3} spacing={20} my={8}>
         <Button 
           size="lg" 
@@ -383,8 +257,13 @@ const Owner = () => {
             Expire
         </Button>
       </SimpleGrid>
+      {contractAddress && (
+        <Box>
+          <Text color="white">Predicted Contract Address: {contractAddress}</Text>
+        </Box>
+      )}
     </VStack>
   );
 };
 
-export default Owner;
+export default OwnerUI;

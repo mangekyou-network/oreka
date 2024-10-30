@@ -6,7 +6,9 @@ import Owner from "../components/Owner";
 const Home: NextPage = () => {
   return (
     <>
-      <Owner />
+
+      {/* <UpDownContainer /> */}
+      <Owner/>
     </>
   );
 };
