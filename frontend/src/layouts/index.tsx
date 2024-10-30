@@ -19,7 +19,7 @@ export default function MainLayout({ children }: IProps) {
       alignItems="flex-start" 
       justifyContent="flex-start"
       >
-        <Header />
+        {/* <Header /> */}
         <Flex flexDirection="column" w="100%" px="20px" py="20px" minH={height * 0.6} mt={{base: '20px', lg: "56px"}}>
           {children}
         </Flex>
