@@ -1,8 +1,8 @@
 import React from 'react';
-import OptionMarket from '../components/Customer';  // Import component của customer
+import Customer from '../components/Customer';  // Import component của customer
 
 const CustomerPage = () => {
-  return <OptionMarket />;
+  return <Customer />;
 };
 
 export default CustomerPage;

@@ -11,7 +11,7 @@ import {
   Button,
   VStack,
 } from "@chakra-ui/react";
-import React, { memo, useMemo } from "react";
+import React, { memo, useCallback, useMemo } from "react";
 import { IDropdownItem } from "../contracts/types";
 import { numberFormat } from "../utils";
 
@@ -24,6 +24,8 @@ interface IProps extends FlexProps {
   contentHeight?: number;
   onSelectItem?: (item: IDropdownItem) => void;
 }
+
+
 
 function Dropdown({
   data,
@@ -38,13 +40,20 @@ function Dropdown({
 }: IProps) {
   const { onOpen, onClose, isOpen } = useDisclosure();
 
-  // Modified getText to show name and label if available
+  // Modified getText to show name and lable if available
   const getText = useMemo(() => {
     const item = data.find((p) => p.value === selectedValue);
     if (!item) return placeholder;
-    // Show name if it exists, otherwise just label
-    return item.name ? `${item.name}: ${item.label}` : item.label; 
+    // Show name if it exists, otherwise just lable
+    return item.name ? `${item.name}: ${item.lable}` : item.lable; 
   }, [selectedValue, data, placeholder]);
+
+  const renderItemlable = useCallback((item: IDropdownItem) => {
+    if (!item) return placeholder;
+    // Show name if it exists, otherwise just lable
+    return item.name ? `${item.name}: ${item.lable}` : item.lable; 
+}, [selectedValue, data, placeholder]);
+
 
   // Set color based on whether the placeholder is displayed or not
   const color = getText === placeholder ? "#FEDF56" : "#FEDF56";
@@ -105,7 +114,7 @@ function Dropdown({
                 _hover={{ border: "1px solid #fff" }}
                 px="15px"
               >
-                {/* Displaying the name and label, or just label if name is not available */}
+                {/* Displaying the name and lable, or just lable if name is not available */}
                 <Text
                   variant="notoSan"
                   color="#6f632a"
@@ -113,7 +122,7 @@ function Dropdown({
                   width="100%"
                   textAlign="center"
                 >
-                  {drop.name ? `${drop.name}: ${drop.label}` : drop.label}
+                  {drop.name ? `${drop.name}: ${drop.lable}` : drop.lable}
                 </Text>
               </Flex>
             </Stack>

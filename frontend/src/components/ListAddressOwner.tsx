@@ -2,32 +2,52 @@ import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 import { Box, Button, HStack, Text, VStack } from '@chakra-ui/react';
 import Factory from '../../../out/Factory.sol/Factory.json';
+import { useToast } from '@chakra-ui/react';
 
-const ListAddressOwner = ({ ownerAddress }: { ownerAddress: string }) => {
+interface ListAddressOwnerProps {
+    ownerAddress: string; // Đảm bảo ownerAddress là địa chỉ hợp lệ
+}
+
+const ListAddressOwner: React.FC<ListAddressOwnerProps> = ({ ownerAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" }) => {
     const [deployedContracts, setDeployedContracts] = useState<string[]>([]);
-    const [loading, setLoading] = useState(true);
-    const contractAddress = '0x4c5859f0F772848b2D91F1D83E2Fe57935348029'; // Địa chỉ của hợp đồng Factory
+    const FactoryAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"; // Thay YOUR_FACTORY_CONTRACT_ADDRESS bằng địa chỉ thực tế
+    const [loading, setLoading] = useState<boolean>(true);
+    const toast = useToast();
 
     useEffect(() => {
         const fetchDeployedContracts = async () => {
-            if (!ownerAddress) return; // Kiểm tra nếu không có địa chỉ owner
-
+            if (!ownerAddress) {
+                console.error("Owner address is not provided");
+                return;
+            }
+    
+            console.log("Fetching contracts for owner address:", ownerAddress);
+    
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            const contract = new ethers.Contract(FactoryAddress, Factory.abi, provider);
+            
+            // Kiểm tra contract chứa hàm `getContractsByOwner`
+            console.log("Available contract methods:", contract.functions);
+    
             try {
-                const provider = new ethers.providers.Web3Provider(window.ethereum);
-                const contract = new ethers.Contract(contractAddress, Factory.abi, provider);
-                console.log("Fetching contracts for owner:", ownerAddress); // Log địa chỉ owner
-                const contracts = await contract.getContractsByOwner(ownerAddress); // Lấy danh sách contract
-                console.log("Deployed Contracts:", contracts); // Log danh sách hợp đồng
-                setDeployedContracts(contracts); // Lưu vào state
+                const contracts = await contract.getContractsByOwner(ownerAddress);
+                console.log("Contracts fetched from Factory contract:", contracts);
+                setDeployedContracts(contracts);
             } catch (error) {
-                console.error("Failed to fetch deployed contracts:", error);
+                console.error("Error fetching contracts:", error);
             } finally {
                 setLoading(false);
             }
         };
-
+    
         fetchDeployedContracts();
-    }, [ownerAddress]); // Thêm ownerAddress vào dependency array
+    }, [ownerAddress]);
+    
+     // Hàm rút gọn địa chỉ ví
+     const shortenAddress = (address: string) => {
+        return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    };
+
 
     return (
         <VStack spacing={8} align="stretch" minHeight="100vh">
@@ -46,20 +66,24 @@ const ListAddressOwner = ({ ownerAddress }: { ownerAddress: string }) => {
                 {/* Bên Phải: Danh sách Sự kiện */}
                 <Box width="70%" p={4}>
                     <Text fontSize="2xl" fontWeight="bold">ALL EVENTS</Text>
-                    {
-                        // Explicitly type the map function to avoid complex union types
-                        deployedContracts.map((address: string, index: number) => (
+                    {loading ? (
+                        <Text>Loading...</Text>
+                    ) : deployedContracts.length > 0 ? (
+                        deployedContracts.map((address, index) => (
                             <Box key={index} p={4} borderWidth={1} borderRadius="md" mb={4}>
+                                <Text fontSize="lg" fontWeight="bold">Contract #{index + 1}</Text>
                                 <Text>Contract Address: {address}</Text>
                                 <Text>Create Date: 24/10/2024</Text>
                                 <Text>Resolve Date: 26/10/2024, Time: 7am</Text>
                                 <HStack spacing={4} mt={2}>
-                                    <Button colorScheme="green">Value of LONG</Button>
-                                    <Button colorScheme="red">Value of SHORT</Button>
+                                    <Button colorScheme="green" size="sm">Value of LONG</Button>
+                                    <Button colorScheme="red" size="sm">Value of SHORT</Button>
                                 </HStack>
                             </Box>
                         ))
-                    }
+                    ) : (
+                        <Text>No contracts found for this owner.</Text>
+                    )}
                 </Box>
             </HStack>
 

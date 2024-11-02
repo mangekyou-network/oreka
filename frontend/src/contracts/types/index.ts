@@ -36,3 +36,9 @@ export interface IDropdownItem {
   lable: string;
   value: string | number;
 }
+// Giả sử đây là định nghĩa của IDropdownItem
+export interface IDropdownItem {
+  value: string | number;
+  lable: string;
+  name?: string; 
+}

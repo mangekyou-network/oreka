@@ -19,7 +19,7 @@ interface Coin {
   label: string;
 }
 
-function OptionMarket() {
+function Customer() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedSide, setSelectedSide] = useState<Side | null>(null);
   const [walletAddress, setWalletAddress] = useState<string>("");
@@ -110,7 +110,7 @@ useEffect(() => {
           duration: 3000,
           isClosable: true,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to connect wallet:", error);
         toast({
           title: "Failed to connect wallet",
@@ -146,7 +146,7 @@ useEffect(() => {
         
         setStrikePrice(parseFloat(ethers.utils.formatUnits(strikePriceBN, 0))); // Giả định 8 số thập phân
         setFinalPrice(parseFloat(ethers.utils.formatUnits(finalPriceBN, 0)));   // Giả định 8 số thập phân
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching market details:", error);
       }
     }
@@ -612,4 +612,4 @@ useEffect(() => {
   );
 }
 
-export default OptionMarket;
+export default Customer;
