@@ -56,6 +56,7 @@ function Dropdown({
 
 
   // Set color based on whether the placeholder is displayed or not
+
   const color = getText === placeholder ? "#FEDF56" : "#FEDF56";
 
   return (

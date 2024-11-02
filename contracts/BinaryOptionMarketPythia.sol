@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-
 import "@openzeppelin/contracts/access/Ownable.sol";
-import {ApolloReceiver} from "@orally-network/solidity-sdk/ApolloReceiver.sol";
 import "./OracleConsumer.sol";
+import {OrallyPythiaConsumer} from "@orally-network/solidity-sdk/OrallyPythiaConsumer.sol";
 
-contract BinaryOptionMarket is Ownable, ApolloReceiver {
+interface IFxPriceFeedExample {
+    function pair() external view returns (string memory);
+
+    function baseTokenAddr() external view returns (address);
+
+    function decimalPlaces() external view returns (uint256);
+}
+
+contract BinaryOptionMarket is OrallyPythiaConsumer, IFxPriceFeedExample {
     enum Side {
         Long,
         Short
@@ -46,6 +53,12 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     mapping(address => uint) public shortBids;
     mapping(address => bool) public hasClaimed;
 
+    uint256 public rate;
+    uint256 public lastUpdate;
+    string public pair;
+    address public baseTokenAddr;
+    uint256 public decimalPlaces;
+
     event Bid(Side side, address indexed account, uint value);
     event MarketResolved(uint256 finalPrice, uint timeStamp);
     event RewardClaimed(address indexed account, uint value);
@@ -55,25 +68,25 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     // FUCK!
     constructor(
         address _owner,
-
         address _executorsRegistry,
         address _apolloCoordinator,
+        address _pythiaRegistry,
+        string memory _pair,
+        address _baseTokenAddr,
+        uint256 _decimalPlaces,
         uint _strikePrice
-    ) Ownable(_owner) ApolloReceiver(_executorsRegistry, _apolloCoordinator) {
+    ) OrallyPythiaConsumer(_pythiaRegistry, _owner) {
         //priceFeed = OracleConsumer(_coprocessor);
+        pair = _pair;
+        baseTokenAddr = _baseTokenAddr;
+        decimalPlaces = _decimalPlaces;
         oracleDetails = OracleDetails(_strikePrice, _strikePrice);
-
         currentPhase = Phase.Bidding;
         transferOwnership(msg.sender); // Initialize the Ownable contract with the contract creator
     }
 
-     function setStrikePrice(uint _strikePrice) external onlyOwner {
-        oracleDetails.strikePrice = _strikePrice;
-    }
-
-
     function bid(Side side) public payable {
-        require(currentPhase == Phase.Trading, "Not in Trading phase");
+        require(currentPhase == Phase.Bidding, "Not in bidding phase");
         require(msg.value > 0, "Value must be greater than zero");
 
         if (side == Side.Long) {
@@ -111,7 +124,6 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         resolved = true;
         currentPhase = Phase.Maturity;
 
-
         emit MarketResolved(finalPrice, updatedAt);
 
         Side winningSide;
@@ -120,7 +132,6 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         } else {
             winningSide = Side.Short;
         }
-
 
         emit MarketOutcome(winningSide, address(0), true);
     }
@@ -147,14 +158,12 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
             userDeposit = longBids[msg.sender];
             totalWinningDeposits = positions.long;
             if (userDeposit > 0) {
-
                 isWinner = true; // Người dùng thắng
             }
         } else {
             userDeposit = shortBids[msg.sender];
             totalWinningDeposits = positions.short;
             if (userDeposit > 0) {
-
                 isWinner = true; // Người dùng thắng
             }
         }
@@ -174,16 +183,12 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         emit RewardClaimed(msg.sender, finalReward);
     }
 
-
     function withdraw() public onlyOwner {
-    uint amount = address(this).balance;
-    require(amount > 0, "No balance to withdraw.");
-    payable(msg.sender).transfer(amount);
-}
-
-
+        uint amount = address(this).balance;
+        require(amount > 0, "No balance to withdraw.");
 
         payable(msg.sender).transfer(amount);
+
         emit Withdrawal(msg.sender, amount);
     }
 
@@ -191,23 +196,10 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     // answer we're going to call it from the resolveMarket - NAIVE method
     function requestPriceFeed() internal {
         // Requesting the ICP/USD price feed with a specified callback gas limit
-        uint256 requestId = apolloCoordinator.requestDataFeed(
-            "ICP/USD",
-            300000
-        );
-    }
-
-    // Overriding the fulfillData function to handle incoming data
-    function fulfillData(bytes memory data) internal override {
-        (
-            uint256 _requestId,
-            string memory _dataFeedId,
-            uint256 _rate,
-            uint256 _decimals,
-            uint256 _timestamp
-        ) = abi.decode(data, (uint256, string, uint256, uint256, uint256));
-
-        resolveWithFulfilledData(_rate, _decimals, _timestamp);
+        // uint256 requestId = apolloCoordinator.requestDataFeed(
+        //     "ICP/USD",
+        //     300000
+        // );
     }
 
     function startTrading() external onlyOwner {
@@ -224,7 +216,6 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
     function parsePrice(
         string memory priceString
     ) internal pure returns (uint) {
-
         bytes memory priceBytes = bytes(priceString);
         uint price = 0;
 
@@ -237,5 +228,23 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
         }
 
         return price;
+    }
+
+    function updateRate(
+        string memory _pairId,
+        uint256 _rate,
+        uint256 _decimals,
+        uint256 _timestamp
+    ) external onlyExecutor(workflowId) {
+        rate = (_rate * (10 ** decimalPlaces)) / (10 ** _decimals); // normalise rate
+        lastUpdate = _timestamp;
+    }
+
+    function updateTime() external view returns (uint256) {
+        return lastUpdate;
+    }
+
+    function exchangeRate() external view returns (uint256) {
+        return rate;
     }
 }

@@ -14,9 +14,12 @@ import React, { useCallback, useEffect, useState } from "react";
 import Customer from "../../components/Customer";
 import Owner from "../../components/Owner";
 import ListAddressOwner from "../../components/ListAddressOwner";
+import { useAppSelector } from "../../reduxs/hooks";
 const DEFAULT_SECOND = 30;
 
 export default function UpDownContainer() {
+
+  const { walletInfo, web3Provider, point } = useAppSelector((state) => state.account);
   // const dispatch = useAppDispatch();
   // const [waiting, setWaiting] = useState<boolean>(false);
   // const [countDown, setCountDown] = useState<number>(0);
@@ -163,7 +166,7 @@ export default function UpDownContainer() {
     <>
     {/* <Customer/>
     <Owner/> */}
-    <ListAddressOwner/>
+    <ListAddressOwner ownerAddress={walletInfo.address}/>
       {/* <Flex
         flex={1}
         w="100%"

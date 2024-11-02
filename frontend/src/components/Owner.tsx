@@ -470,6 +470,82 @@ const Owner = () => {
             </Button>
           </SimpleGrid>
         </>
+      {!isWalletConnected ? (
+        <Button 
+          onClick={connectWallet} 
+          colorScheme="teal" 
+          size="lg" 
+          p={6}
+          _hover={{ bg: "teal.500", transform: "scale(1.05)" }}>
+            Connect Wallet
+        </Button>
+      ) : (
+        <HStack spacing={4} justify="space-between" width="500px" color="#FF6B6B">
+            <HStack>
+              <Icon as={FaWallet} />
+              <Text>{abbreviateAddress(walletAddress)}</Text>
+            </HStack>
+            <HStack>
+              <Icon as={FaEthereum} />
+              <Text>{parseFloat(balance).toFixed(4)} ETH</Text>
+            </HStack>
+          </HStack>
+      )}
+
+      <SimpleGrid columns={1}>
+        <HStack spacing={6} my={8}>
+          <Input
+            placeholder="Strike Price"
+            value={strikePrice}
+            onChange={(e) => setStrikePrice(e.target.value)}
+            width={350}
+            bg="gray.800"
+            color="white"
+            _placeholder={{ color: "gray.500" }}
+          />
+          <Button 
+            onClick={deployContract} 
+            colorScheme="pink" 
+            size="lg" 
+            _hover={{ bg: "pink.600", transform: "scale(1.05)" }}>
+              Deploy Contract
+          </Button>
+        </HStack>
+      </SimpleGrid>
+      <SimpleGrid columns={3} spacing={20} my={8}>
+        <Button 
+          size="lg" 
+          w="200px" 
+          p={6} 
+          colorScheme="purple"
+          _hover={{ bg: "purple.600", transform: "scale(1.05)" }}
+          onClick={startTrading}>
+            Start Trading
+        </Button>
+        <Button 
+          size="lg" 
+          w="200px" 
+          p={6} 
+          colorScheme="blue"
+          _hover={{ bg: "blue.600", transform: "scale(1.05)" }}
+          onClick={resolveMarket}>
+            Resolve
+        </Button>
+        <Button 
+          size="lg" 
+          w="200px" 
+          p={6} 
+          colorScheme="red"
+          _hover={{ bg: "red.600", transform: "scale(1.05)" }}
+          onClick={expireMarket}>
+            Expire
+        </Button>
+      </SimpleGrid>
+      {contractAddress && (
+        <Box>
+          <Text color="white">Predicted Contract Address: {contractAddress}</Text>
+        </Box>
+>>>>>>> master
       )}
     </VStack>
   );

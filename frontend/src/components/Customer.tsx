@@ -338,7 +338,6 @@ useEffect(() => {
           isClosable: true,
         });
       } catch (error) {
-        console.error("Error claiming reward:", error);
         toast({
           title: "Error claiming reward",
           description: "An error occurred. Please try again.",

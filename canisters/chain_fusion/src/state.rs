@@ -28,6 +28,7 @@ pub struct State {
     pub evm_address: Option<String>,
     pub nonce: U256,
     pub block_tag: BlockTag,
+    pub latest_price: Option<f64>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
