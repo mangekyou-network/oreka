@@ -176,16 +176,12 @@ contract BinaryOptionMarket is Ownable, ApolloReceiver {
 
 
     function withdraw() public onlyOwner {
-    uint amount = address(this).balance;
-    require(amount > 0, "No balance to withdraw.");
-    payable(msg.sender).transfer(amount);
-}
-
-
-
+        uint amount = address(this).balance;
+        require(amount > 0, "No balance to withdraw.");
         payable(msg.sender).transfer(amount);
-        emit Withdrawal(msg.sender, amount);
+        emit Withdrawal(msg.sender, amount);    
     }
+
 
     // question how should we call this frequently?
     // answer we're going to call it from the resolveMarket - NAIVE method

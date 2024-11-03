@@ -10,7 +10,7 @@ import { BigNumber } from 'ethers';
 import { motion, useAnimation } from 'framer-motion';
 import Owner from './Owner';
 import BinaryOptionMarket from '../../../out/BinaryOptionMarket.sol/BinaryOptionMarket.json';
-
+import { useRouter } from 'next/router';
 enum Side { Long, Short }
 enum Phase { Bidding, Trading, Maturity, Expiry }
 
@@ -49,7 +49,17 @@ function Customer() {
 
   const toast = useToast();
   const priceControls = useAnimation();
-  const contractAddress = "0x4c5859f0F772848b2D91F1D83E2Fe57935348029";  // Địa chỉ contract của bạn
+  const router = useRouter(); // Initialize the router
+  const [contractAddress, setContractAddress] = useState<string>("");
+
+  useEffect(() => {
+    // Check if contractAddress is available in the query parameters
+    if (router.query.contractAddress) {
+      setContractAddress(router.query.contractAddress as string); // Set the contractAddress from query
+    } else {
+      setContractAddress("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"); // Default address if not provided
+    }
+  }, [router.query.contractAddress]); 
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -132,6 +142,7 @@ useEffect(() => {
   };
 
   // Lấy trạng thái từ smart contract
+  
   const fetchMarketDetails = useCallback(async () => {
     if (contract) {
       try {

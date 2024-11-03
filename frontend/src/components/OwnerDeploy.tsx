@@ -10,7 +10,7 @@ interface OwnerProps {
   address: string;
 }
 
-const Owner : React.FC<OwnerProps> = ({ address })=> {
+const OwnerDeploy: React.FC<OwnerProps> = ({ address })=> {
   const [contractAddress, setContractAddress] = useState('');
   const [strikePrice, setStrikePrice] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
@@ -158,90 +158,7 @@ const Owner : React.FC<OwnerProps> = ({ address })=> {
 // Triển khai hợp đồng với CREATE2
   
   // Chuyển đổi trạng thái từ Bidding sang Trading
-  const startTrading = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
-
-      const tx = await binaryOptionMarketContract.startTrading();
-      await tx.wait();
-
-      fetchContractBalance();
-
-      toast({
-        title: "Trading started!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error("Failed to start trading:", error);
-      toast({
-        title: "Failed to start trading",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-
-  // Chuyển đổi trạng thái từ Trading sang Maturity
-  const resolveMarket = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
-
-      const tx = await binaryOptionMarketContract.resolveMarket();
-      await tx.wait();
-
-      toast({
-        title: "Market resolved!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error("Failed to resolve market:", error);
-      toast({
-        title: "Failed to resolve market",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-
-  // Chuyển đổi trạng thái từ Maturity sang Expiry
-  const expireMarket = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
-
-      const tx = await binaryOptionMarketContract.expireMarket();
-      await tx.wait();
-
-      toast({
-        title: "Market expired!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      console.error("Failed to expire market:", error);
-      toast({
-        title: "Failed to expire market",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
+  
 
   // Cập nhật giá strike
   const updateStrikePrice = async () => {
@@ -323,34 +240,6 @@ const Owner : React.FC<OwnerProps> = ({ address })=> {
   
 
   
-
-  const withdraw = async () => {
-    try {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const binaryOptionMarketContract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
-
-      const tx = await binaryOptionMarketContract.withdraw();
-      await tx.wait();
-
-      toast({
-        title: "Withdrawal successful!",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-      fetchContractBalance(); // Cập nhật lại số dư sau khi rút
-    } catch (error: any) {
-      console.error("Failed to withdraw:", error);
-      toast({
-        title: "Failed to withdraw",
-        description: error.message || "An unexpected error occurred.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
 
   useEffect(() => {
     if (contractAddress) {
@@ -443,41 +332,10 @@ const Owner : React.FC<OwnerProps> = ({ address })=> {
               </VStack>
             </SimpleGrid>
           )}
-
-          <SimpleGrid columns={3} spacing={20} my={8}>
-            <Button 
-              size="lg" 
-              w="200px" 
-              p={6} 
-              colorScheme="purple"
-              _hover={{ bg: "purple.600", transform: "scale(1.05)" }}
-              onClick={startTrading}>
-                Start Trading
-            </Button>
-            <Button 
-              size="lg" 
-              w="200px" 
-              p={6} 
-              colorScheme="blue"
-              _hover={{ bg: "blue.600", transform: "scale(1.05)" }}
-              onClick={resolveMarket}>
-                Resolve
-            </Button>
-            <Button 
-              size="lg" 
-              w="200px" 
-              p={6} 
-              colorScheme="red"
-              _hover={{ bg: "red.600", transform: "scale(1.05)" }}
-              onClick={expireMarket}>
-                Expire
-            </Button>
-          </SimpleGrid>
         </>
       )}
     </VStack>
   );
-};
+};  
 
-
-export default Owner;
+export default OwnerDeploy;
