@@ -1,4 +1,4 @@
-mod calculate_result;
+pub mod calculate_result;
 mod submit_result;
 
 use std::fmt;

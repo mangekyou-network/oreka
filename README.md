@@ -2,62 +2,6 @@
 
 ![Chain Fusion Hero](https://github.com/letmejustputthishere/chain-fusion-starter/assets/32162112/e787cf9c-0bfc-4ce3-8211-8df61cf06a0b)
 
-## Table of Contents
-
--   [Overview](#overview)
-    -   [What is a Coprocessor?](#what-is-a-coprocessor)
-    -   [Why Use ICP as a Coprocessor for Ethereum?](#why-use-icp-as-a-coprocessor-for-ethereum)
--   [Getting Started](#getting-started)
-    -   [In the Cloud](#in-the-cloud)
-    -   [Locally](#locally)
-    -   [Manual Setup](#manual-setup)
--   [Architecture](#architecture)
-    -   [EVM Smart Contract](#evm-smart-contract)
-    -   [Chain Fusion Canister](#chain-fusion-canister)
--   [Development](#development)
-    -   [Interacting with the EVM Smart Contract](#interacting-with-the-evm-smart-contract)
-    -   [Leveraging `storage.rs` for Stable Memory](#leveraging-storagers-for-stable-memory)
-    -   [Read from EVM Smart Contracts](#read-from-evm-smart-contracts)
-    -   [Sending Transactions to EVM Smart Contracts](#sending-transactions-to-evm-smart-contracts)
--   [Use Cases](#use-cases)
--   [Additional Resources](#additional-resources)
-
-## Overview
-
-This project demonstrates how to use the Internet Computer (ICP) as a coprocessor for EVM smart contracts. The coprocessor listens to events emitted by an EVM smart contract, processes them, and optionally sends the results back. This starter project is a proof of concept and should not be used in production environments.
-
-To get a better understanding of how the coprocessor works, make sure you check out the recorded workshops in the [Additional Resources](#additional-resources) section.
-
-<p align="center">
-<img src="https://github.com/letmejustputthishere/chain-fusion-starter/assets/32162112/7947d2f1-bbaa-4291-b089-2eb05c5d42df" height="400">
-</p>
-
-### What is a coprocessor?
-
-The concept of coprocessors originated in computer architecture as a technique to enhance performance. Traditional computers rely on a single central processing unit (CPU) to handle all computations. However, as workloads grew more complex, the CPU became overloaded.
-
-Coprocessors were introduced to offload specific tasks from the CPU to specialized hardware. Similarly, in the EVM ecosystem, smart contracts often face computational constraints. Coprocessors and stateful Layer 2 solutions extend the capabilities of the EVM by offloading specific tasks to more powerful environments.
-
-Read more about coprocessors in the context of Ethereum in the article ["A Brief Intro to Coprocessors"](https://crypto.mirror.xyz/BFqUfBNVZrqYau3Vz9WJ-BACw5FT3W30iUX3mPlKxtA).
-
-### Why Use ICP as a Coprocessor for Ethereum?
-
-Canister smart contracts on ICP can securely read from EVM smart contracts (using [HTTPS Outcalls](https://internetcomputer.org/https-outcalls) or the [EVM RPC](https://internetcomputer.org/docs/current/developer-docs/multi-chain/ethereum/evm-rpc/overview) canister) and write to them (using Chain-key Signatures, i.e., [Threshold ECDSA](https://internetcomputer.org/docs/current/developer-docs/smart-contracts/encryption/t-ecdsa)). This eliminates the need for additional parties to relay messages between the networks, and no extra work is required on the EVM side to verify computation results as the EVM smart contract just needs to check for the proper sender.
-
-Moreover, canister smart contracts have numerous capabilities that can extend smart contract functionality:
-
--   WASM Runtime, which is more efficient than the EVM and allows programming in [Rust, JavaScript, and other traditional languages](https://internetcomputer.org/docs/current/developer-docs/smart-contracts/write/overview#choosing-the-programming-language-for-the-backend).
--   [400 GiB of memory](https://internetcomputer.org/docs/current/developer-docs/smart-contracts/best-practices/storage/) with low storage costs.
--   [Long-running computations](https://internetcomputer.org/docs/current/developer-docs/smart-contracts/maintain/resource-limits/) including [AI inference](https://x.com/dominic_w/status/1770884845570326589).
--   [HTTPS Outcalls](https://internetcomputer.org/docs/current/references/https-outcalls-how-it-works) for interacting with other chains and traditional web services.
--   [Chain-key signatures](https://internetcomputer.org/docs/current/references/t-ecdsa-how-it-works) for signing transactions for other chains, including Ethereum and Bitcoin.
--   [Timers](https://internetcomputer.org/docs/current/developer-docs/smart-contracts/advanced-features/periodic-tasks/) for syncing with EVM events and scheduling tasks.
--   [Unbiasable randomness](https://internetcomputer.org/docs/current/developer-docs/smart-contracts/advanced-features/randomness/) provided by threshold BLS signatures.
--   Ability to [serve web content](https://internetcomputer.org/how-it-works/smart-contracts-serve-the-web/) directly from canisters.
--   The [reverse gas model](https://internetcomputer.org/docs/current/developer-docs/gas-cost/#the-reverse-gas-model) frees end users from paying for every transaction.
--   ~1-2 second [finality](https://internetcomputer.org/how-it-works/consensus/).
--   [Multi-block transactions](https://internetcomputer.org/capabilities/multi-block-transactions/).
-
 ## Getting Started
 
 To deploy the project locally, run `./deploy.sh` from the project root. This script will:
@@ -79,15 +23,6 @@ Check the `deploy.sh` script comments for detailed deployment steps.
 Ensure Docker and VS Code are installed and running, then click the button below:
 
 [![Open locally in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/letmejustputthishere/chain-fusion-starter)
-
-### Manual Setup
-
-Ensure the following are installed on your system:
-
--   [Node.js](https://nodejs.org/en/) `>= 21`
--   [Foundry](https://github.com/foundry-rs/foundry)
--   [Caddy](https://caddyserver.com/docs/install#install)
--   [DFX](https://internetcomputer.org/docs/current/developer-docs/build/install-upgrade-remove) `>= 0.18`
 
 Run these commands in a new, empty project directory:
 
@@ -238,32 +173,3 @@ To send transactions to the EVM, this project uses the [`ic-evm-utils`](https://
 -   **transfer_eth**: The `transfer_eth` function demonstrates how to transfer ETH from a canister-owned EVM address to another address. It covers creating a transaction, signing it with the canister's private key, and sending it to the EVM network. `transfer_eth` uses the `send_raw_transaction` function to send the transaction.
 
 -   **contract_interaction**: The `contract_interaction` function demonstrates how to interact with arbitrary EVM smart contracts. It constructs a transaction based on the desired contract interaction, signs it with the canister's private key, and sends it to the EVM network. `contract_interaction` uses the `send_raw_transaction` function to send the transaction. The `submit_result` function in this starter project leverages this function to send the results of processed jobs back to the EVM smart contract.
-
-## Use Cases
-
-Examples leveraging the chain fusion starter logic:
-
--   [On-chain asset and metadata creation for ERC721 NFT contracts](https://github.com/letmejustputthishere/chain-fusion-nft-creator)
--   [Ethereum Donations Streamer](https://github.com/frederikrothenberger/chain-fusion-donations)
--   [Recurring Transactions on Ethereum](https://github.com/malteish/ReTransICP)
-
-Build your own use case and [share it with the community](https://github.com/letmejustputthishere/chain-fusion-starter/discussions/10)!
-
-Some ideas you could explore:
-
--   A referral canister that distributes rewards to users based on their interactions with an EVM smart contract
--   A ckNFT canister that mints an NFT on the ICP when an EVM helper smart contract emits a `ReceivedNft`, similar to the [`EthDepositHelper`](https://github.com/dfinity/ic/blob/master/rs/ethereum/cketh/minter/EthDepositHelper.sol) contract the ckETH minter uses. This could enable users to trade NFTs on the ICP without having to pay gas fees on Ethereum.
--   Decentralized DCA (dollar cost average) service for decentralized exchanges like Uniswap deployed on EVM chains
--   Price oracles for DeFi applications via [exchange rate canister](https://github.com/dfinity/exchange-rate-canister)
--   Prediction market resolution
--   Soulbound NFT metadata and assets stored in a canister
--   An on-chain managed passive index fund (e.g. top 10 ERC20 tokens traded on Uniswap)
--   An on-chain donations stream
-
-## Additional Resources
-
--   [DappCon24 Workshop](https://www.youtube.com/watch?v=EykvCT5mgrY)
--   [ETHPrague24 Workshop](https://live.ethprague.com/ethprague/watch?session=665833d1036a981493b0bf58)
--   [Using Cast](https://book.getfoundry.sh/reference/cast/)
-
-For more details and discussions, visit the [DFINITY Developer Forum](https://forum.dfinity.org/u/cryptoschindler/summary) or follow [@cryptoschindler on Twitter](https://twitter.com/cryptoschindler).
