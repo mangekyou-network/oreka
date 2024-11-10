@@ -1,6 +1,7 @@
 import Principal "mo:base/Principal";
 import Time "mo:base/Time";
 import Int "mo:base/Int";
+import Int64 "mo:base/Int64";
 import Nat "mo:base/Nat";
 import Float "mo:base/Float";
 import HashMap "mo:base/HashMap";
@@ -33,8 +34,8 @@ actor BinaryOptionMarket {
     };
 
     type OracleDetails = {
-        strikePrice : Nat;
-        finalPrice : Nat;
+        strikePrice : Float;
+        finalPrice : Float;
     };
 
     type Position = {
@@ -48,19 +49,31 @@ actor BinaryOptionMarket {
         refundFee : Nat;
     };
 
-    private stable var owner : Principal = Principal.fromText("aaaaa-aa");
+    private stable var owner : Principal = Principal.fromText("p5ouy-t4hex-eymja-mnwlt-b62ri-3xaen-3m3n7-iwhee-qfali-gsdgd-sqe");
     private var oracleDetails : OracleDetails = { strikePrice = 0; finalPrice = 0 };
     private var positions : Position = { long = 0; short = 0 };
     private var fees : MarketFees = { poolFee = 0; creatorFee = 0; refundFee = 0 };
     private var totalDeposited : Nat = 0;
     private var resolved : Bool = false;
-    private var currentPhase : Phase = #Bidding;
+    private var currentPhase : Phase = #Trading;
     private let feePercentage : Nat = 10; // 10% fee on rewards
 
     private var longBids = HashMap.HashMap<Principal, Nat>(0, Principal.equal, Principal.hash);
     private var shortBids = HashMap.HashMap<Principal, Nat>(0, Principal.equal, Principal.hash);
     private var hasClaimed = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
 
+    public shared(msg) func initializeOwner() : async () {
+        owner := msg.caller;
+    };
+
+    public query func getOwner() : async Principal {
+        owner
+    };
+
+    public shared(msg) func changeOwner(newOwner : Principal) : async () {
+        assert(msg.caller == owner);
+        owner := newOwner;
+    };
 
     public query func transform(raw : Types.TransformArgs) : async Types.CanisterHttpResponsePayload {
         let transformed : Types.CanisterHttpResponsePayload = {
@@ -91,7 +104,7 @@ actor BinaryOptionMarket {
         let start_timestamp : Types.Timestamp = 1682978460; //May 1, 2023 22:01:00 GMT
         let end_timestamp : Types.Timestamp = 1682978520;//May 1, 2023 22:02:00 GMT
         let host : Text = "api.exchange.coinbase.com";
-        let url = "https://" # host # "/products/ICP-USD/candles?start=" # Nat64.toText(start_timestamp) # "&end=" # Nat64.toText(start_timestamp) # "&granularity=" # Nat64.toText(ONE_MINUTE);
+        let url = "https://" # host # "/products/ETH-USD/candles?start=" # Nat64.toText(start_timestamp) # "&end=" # Nat64.toText(start_timestamp) # "&granularity=" # Nat64.toText(ONE_MINUTE);
 
         // 2.2 prepare headers for the system http_request call
         let request_headers = [
@@ -168,7 +181,16 @@ actor BinaryOptionMarket {
         //         243.5678 <-- volume
         //     ],
         // ]
-        decoded_text
+
+        Debug.print("Decoded text: " # decoded_text);
+
+        // Loại bỏ dấu ngoặc vuông ngoài cùng
+        let trimmed_text = Text.trim(decoded_text, #text("[]"));
+        
+        // Tách các giá trị trong mảng
+        let values = Iter.toArray(Text.split(trimmed_text, #text(",")));
+
+        values[4]
     };
 
     // Các sự kiện được thay thế bằng các hàm ghi log
@@ -176,7 +198,7 @@ actor BinaryOptionMarket {
         Debug.print("Bid: " # debug_show(side) # " " # debug_show(account) # " " # debug_show(value));
     };
 
-    private func logMarketResolved(finalPrice : Nat, timeStamp : Int) {
+    private func logMarketResolved(finalPrice : Float, timeStamp : Int) {
         Debug.print("MarketResolved: " # debug_show(finalPrice) # " " # debug_show(timeStamp));
     };
 
@@ -209,15 +231,15 @@ actor BinaryOptionMarket {
 
     public shared(msg) func resolveMarket() : async () {
         assert(msg.caller == owner);
-        assert(currentPhase == #Trading);
+        assert(currentPhase == #Bidding);
 
         let price = await get_icp_usd_exchange();
-        let finalPrice = await textToNat(price);
+        let finalPrice = await textToFloat(price);
         
         resolveWithFulfilledData(finalPrice, Time.now());
     };
 
-    private func resolveWithFulfilledData(rate : Nat, timestamp : Int) {
+    private func resolveWithFulfilledData(rate : Float, timestamp : Int) {
         let finalPrice = rate;
         oracleDetails := { strikePrice = oracleDetails.strikePrice; finalPrice = finalPrice };
 
@@ -279,8 +301,8 @@ actor BinaryOptionMarket {
 
     public shared(msg) func startTrading() : async () {
         assert(msg.caller == owner);
-        assert(currentPhase == #Bidding);
-        currentPhase := #Trading;
+        assert(currentPhase == #Trading);
+        currentPhase := #Bidding;
     };
 
     public shared(msg) func expireMarket() : async () {
@@ -290,17 +312,96 @@ actor BinaryOptionMarket {
         currentPhase := #Expiry;
     };
 
+    /// VIEW FUNCTIONS
+
+    public query func getContractBalance() : async Nat {
+        totalDeposited
+    };
+
+    public query func getBidders() : async {long: [(Principal, Nat)]; short: [(Principal, Nat)]} {
+        {
+            long = Iter.toArray(longBids.entries());
+            short = Iter.toArray(shortBids.entries());
+        }
+    };
+
+    public query func getCurrentPhase() : async Phase {
+        currentPhase
+    };
+
+    public query func getMarketDetails() : async {
+        oracleDetails: OracleDetails;
+        positions: Position;
+        resolved: Bool;
+    } {
+        {
+            oracleDetails;
+            positions;
+            resolved;
+        }
+    };
+
+    public query func getUserPosition(caller : Principal) : async {long: Nat; short: Nat} {
+        {
+            long = Option.get(longBids.get(caller), 0);
+            short = Option.get(shortBids.get(caller), 0);
+        }
+    };
+
+    public query func hasUserClaimed(caller : Principal) : async Bool {
+        Option.get(hasClaimed.get(caller), false)
+    };
+
     private func textToNat(txt : Text) : async (Nat) {
         assert(txt.size() > 0);
         let chars = txt.chars();
 
         var num : Nat = 0;
-        for (v in chars){
-            let charToNum = Nat32.toNat(Char.toNat32(v)-48);
-            assert(charToNum >= 0 and charToNum <= 9);
-            num := num * 10 +  charToNum;          
+        for (c in chars) {
+            switch (Char.toNat32(c)) {
+                case (d) {
+                    if (d >= 48 and d <= 57) {
+                        num := num * 10 + Nat32.toNat(d - 48);
+                    } else {
+                        Debug.print("Invalid character in input: " # debug_show(c));
+                        assert(false);
+                    };
+                };
+            };
         };
 
-        num;
+        num
+    };
+
+    public func textToFloat(t : Text) : async Float {
+
+        var i : Float = 1;
+        var f : Float = 0;
+        var isDecimal : Bool = false;
+
+        for (c in t.chars()) {
+        if (Char.isDigit(c)) {
+            let charToNat : Nat64 = Nat64.fromNat(Nat32.toNat(Char.toNat32(c) -48));
+            let natToFloat : Float = Float.fromInt64(Int64.fromNat64(charToNat));
+            if (isDecimal) {
+            let n : Float = natToFloat / Float.pow(10, i);
+            f := f + n;
+            } else {
+            f := f * 10 + natToFloat;
+            };
+            i := i + 1;
+        } else {
+            if (Char.equal(c, '.') or Char.equal(c, ',')) {
+            f := f / Float.pow(10, i); // Force decimal
+            f := f * Float.pow(10, i); // Correction
+            isDecimal := true;
+            i := 1;
+            } else {
+            throw Error.reject("NaN");
+            };
+        };
+        };
+
+        return f;
     };
 };
