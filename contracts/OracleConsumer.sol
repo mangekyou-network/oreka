@@ -83,12 +83,12 @@ contract OracleConsumer is ChainlinkStyleInterface {
         job_id++;
     }
 
-    function getResult(uint _job_id) public view returns (string memory) {
+    function getResult() public view returns (string memory) {
         uint80 round = currentRoundId - 1;
         return rounds[round].answer;
     }
 
-    function callback(string calldata _result, uint256 _job_id) public {
+    function callback(string calldata _result) public {
         require(
             msg.sender == coprocessor,
             "Only the coprocessor can call this function"

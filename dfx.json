@@ -1,5 +1,9 @@
 {
   "canisters": {
+    "binary_option_market": {
+      "main": "canisters/binary_option_market/src/main.mo",
+      "type": "motoko"
+    },
     "chain_fusion": {
       "candid": "canisters/chain_fusion/chain_fusion.did",
       "package": "chain_fusion",
@@ -41,7 +45,7 @@
   "defaults": {
     "build": {
       "args": "",
-      "packtool": ""
+      "packtool": "mops sources"
     }
   },
   "output_env_file": ".env",

@@ -1,0 +1,40 @@
+{
+  "name": "oreka",
+  "version": "1.0.0",
+  "description": "![Chain Fusion Hero](https://github.com/letmejustputthishere/chain-fusion-starter/assets/32162112/e787cf9c-0bfc-4ce3-8211-8df61cf06a0b)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@chakra-ui/react": "^2.10.3",
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@orally-network/solidity-sdk": "^0.3.0",
+    "ether": "^0.0.9",
+    "framer-motion": "^11.11.11",
+    "next": "^15.0.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.27.0",
+    "web3": "^4.13.0",
+    "web3modal": "^1.9.12"
+  },
+  "devDependencies": {
+    "@types/node": "17.0.31",
+    "@types/react": "^17.0.39",
+    "@types/react-dom": "18.0.3",
+    "eslint": "8.15.0",
+    "eslint-config-next": "12.1.6",
+    "typescript": "4.6.4"
+  },
+  "packageManager": "yarn@1.22.21+sha1.1959a18351b811cdeedbd484a8f86c3cc3bbaf72",
+  "package-name": "^1.0.0"
+}
