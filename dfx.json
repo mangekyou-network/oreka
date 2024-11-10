@@ -4,7 +4,9 @@
       "candid": "canisters/chain_fusion/chain_fusion.did",
       "package": "chain_fusion",
       "type": "rust",
-      "dependencies": ["evm_rpc"],
+      "dependencies": [
+        "evm_rpc"
+      ],
       "specified_id": "2222s-4iaaa-aaaaf-ax2uq-cai",
       "metadata": [
         {
@@ -24,13 +26,13 @@
       "specified_id": "7hfb6-caaaa-aaaar-qadga-cai",
       "init_arg": "(record { nodesInSubnet = 28 })"
     },
-    "xrc" : {
+    "xrc": {
       "type": "custom",
-      "candid" : "https://raw.githubusercontent.com/dfinity/exchange-rate-canister/51428a562622c5fb3f0bf24214cff77f27ce9bdf/src/xrc/xrc.did",
+      "candid": "https://raw.githubusercontent.com/dfinity/exchange-rate-canister/51428a562622c5fb3f0bf24214cff77f27ce9bdf/src/xrc/xrc.did",
       "wasm": "https://github.com/dfinity/exchange-rate-canister/releases/download/2024.04.05/xrc.wasm.gz",
-      "remote" : {
+      "remote": {
         "id": {
-          "ic" : "uf6dk-hyaaa-aaaaq-qaaaq-cai"
+          "ic": "uf6dk-hyaaa-aaaaq-qaaaq-cai"
         }
       },
       "specified_id": "uf6dk-hyaaa-aaaaq-qaaaq-cai"
