@@ -2,7 +2,32 @@
   "canisters": {
     "binary_option_market": {
       "main": "canisters/binary_option_market/src/main.mo",
-      "type": "motoko"
+      "type": "motoko",
+      "dependencies": [
+        "icp_ledger_canister",
+        "invoice_canister"
+      ]
+    },
+    "icp_ledger_canister": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/aba60ffbc46acfc8990bf4d5685c1360bd7026b9/rs/ledger_suite/icp/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/aba60ffbc46acfc8990bf4d5685c1360bd7026b9/canisters/ledger-canister.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        }
+      }
+    },
+    "internet_identity": {
+      "type": "pull",
+      "id": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+    },
+    "invoice_canister": {
+      "main": "canisters/invoice/src/main.mo",
+      "type": "motoko",
+      "dependencies": [
+        "icp_ledger_canister"
+      ]
     },
     "chain_fusion": {
       "candid": "canisters/chain_fusion/chain_fusion.did",

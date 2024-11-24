@@ -1,2 +1,4 @@
 [dependencies]
 base = "0.13.2"
+icrc1 = "0.0.2"
+sha2 = "0.1.0"
