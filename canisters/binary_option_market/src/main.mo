@@ -30,7 +30,10 @@ import Invoice "canister:invoice_canister";
 
 import Types "Types";
 
-shared(msg) actor class BinaryOptionMarket() {
+import TrieMap "mo:base/TrieMap";
+import ICRC "./ICRC";
+
+shared(msg) actor class BinaryOptionMarket() = self {
     type Side = {
         #Long;
         #Short;
@@ -129,7 +132,7 @@ shared(msg) actor class BinaryOptionMarket() {
     AID.principalToSubaccount(p);
   };
 
-    func toPaymentBlobAccountId(controller: Principal, userPrincipal: Principal): async Blob {
+   public func toPaymentBlobAccountId(controller: Principal, userPrincipal: Principal): async Blob {
         await toBlobAccountId(controller, await toSubAccount(userPrincipal));
     };
 
@@ -614,7 +617,7 @@ shared(msg) actor class BinaryOptionMarket() {
     };
 
     public func getContractBalance() : async Nat64 {
-        let account_id = await IcpLedger.account_identifier({ owner = Principal.fromText("hc26s-dcsfa-7exlo-hmlcv-x5g6q-vuf7k-gog6g-ih6ui-d7u4j-uh7xu-zqe"); subaccount = null });
+        let account_id = await IcpLedger.account_identifier({ owner = Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"); subaccount = null });
         let balance = await IcpLedger.account_balance({ account = account_id });
         return balance.e8s;
     };
@@ -740,12 +743,161 @@ shared(msg) actor class BinaryOptionMarket() {
         return invoiceResult;
     };
 
+    // Add new state variables for token balances
+    private var balancesA = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
+    private var balancesB = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
+    private stable var stableBalancesA : ?[(Principal, Nat)] = null;
+    private stable var stableBalancesB : ?[(Principal, Nat)] = null;
+
+    // Add new types for deposit functionality
+    public type DepositArgs = {
+        spender_subaccount : ?Blob;
+        token : Principal;
+        from : ICRC.Account;
+        amount : Nat;
+        fee : ?Nat;
+        memo : ?Blob;
+        created_at_time : ?Nat64;
+    };
+
+    public type DepositError = {
+        #TransferFromError : ICRC.TransferFromError;
+    };
+
+    // Add deposit function
+    public shared (msg) func deposit(args : DepositArgs) : async Result.Result<Nat, DepositError> {
+        let token : ICRC.Actor = actor (Principal.toText(args.token));
+        let balances = which_balances(args.token);
+
+        let fee = switch (args.fee) {
+            case (?f) { f };
+            case (null) { await token.icrc1_fee() };
+        };
+
+        let transfer_result = await token.icrc2_transfer_from({
+            spender_subaccount = args.spender_subaccount;
+            from = args.from;
+            to = { owner = Principal.fromActor(self); subaccount = null };
+            amount = args.amount;
+            fee = ?fee;
+            memo = args.memo;
+            created_at_time = args.created_at_time;
+        });
+
+        let block_height = switch (transfer_result) {
+            case (#Ok(block_height)) { block_height };
+            case (#Err(err)) { return #err(#TransferFromError(err)) };
+        };
+
+        let sender = args.from.owner;
+        let old_balance = Option.get(balances.get(sender), 0 : Nat);
+        balances.put(sender, old_balance + args.amount);
+
+        #ok(block_height)
+    };
+
+    // Add withdraw functionality
+    public type WithdrawArgs = {
+        token : Principal;
+        to : ICRC.Account;
+        amount : Nat;
+        fee : ?Nat;
+        memo : ?Blob;
+        created_at_time : ?Nat64;
+    };
+
+    public type WithdrawError = {
+        #InsufficientFunds : { balance : ICRC.Tokens };
+        #TransferError : ICRC.TransferError;
+    };
+
+    public shared (msg) func withdrawICP(args : WithdrawArgs) : async Result.Result<Nat, WithdrawError> {
+        let token : ICRC.Actor = actor (Principal.toText(args.token));
+        let balances = which_balances(args.token);
+
+        let fee = switch (args.fee) {
+            case (?f) { f };
+            case (null) { await token.icrc1_fee() };
+        };
+
+        let old_balance = Option.get(balances.get(msg.caller), 0 : Nat);
+        if (old_balance < args.amount + fee) {
+            return #err(#InsufficientFunds { balance = old_balance });
+        };
+
+        let new_balance = old_balance - args.amount - fee;
+        if (new_balance == 0) {
+            balances.delete(msg.caller);
+        } else {
+            balances.put(msg.caller, new_balance);
+        };
+
+        let transfer_result = await token.icrc1_transfer({
+            from_subaccount = null;
+            to = args.to;
+            amount = args.amount;
+            fee = ?fee;
+            memo = args.memo;
+            created_at_time = args.created_at_time;
+        });
+
+        let block_height = switch (transfer_result) {
+            case (#Ok(block_height)) { block_height };
+            case (#Err(err)) {
+                let b = Option.get(balances.get(msg.caller), 0 : Nat);
+                balances.put(msg.caller, b + args.amount + fee);
+                return #err(#TransferError(err));
+            };
+        };
+
+        #ok(block_height)
+    };
+
+    // Add helper function for balance management
+    private func which_balances(t : Principal) : TrieMap.TrieMap<Principal, Nat> {
+        // You'll need to define your token principals
+        let token_a = Principal.fromText("..."); // Replace with actual token principal
+        let token_b = Principal.fromText("..."); // Replace with actual token principal
+        
+        if (t == token_a) {
+            balancesA
+        } else if (t == token_b) {
+            balancesB
+        } else {
+            Debug.trap("invalid token canister");
+        }
+    };
+
+    // Update system functions to handle new stable storage
     system func preupgrade() {
+        // Existing preupgrade logic
         invoicesStable := Iter.toArray(invoices.entries());
+        
+        // Add new balance storage
+        stableBalancesA := ?Iter.toArray(balancesA.entries());
+        stableBalancesB := ?Iter.toArray(balancesB.entries());
     };
 
     system func postupgrade() {
+        // Existing postupgrade logic
         invoices := HashMap.fromIter(Iter.fromArray(invoicesStable), 16, Nat.equal, Hash.hash);
         invoicesStable := [];
+        
+        // Add new balance restoration
+        switch (stableBalancesA) {
+            case (null) {};
+            case (?entries) {
+                balancesA := TrieMap.fromEntries<Principal, Nat>(entries.vals(), Principal.equal, Principal.hash);
+                stableBalancesA := null;
+            };
+        };
+
+        switch (stableBalancesB) {
+            case (null) {};
+            case (?entries) {
+                balancesB := TrieMap.fromEntries<Principal, Nat>(entries.vals(), Principal.equal, Principal.hash);
+                stableBalancesB := null;
+            };
+        };
     };
 };
