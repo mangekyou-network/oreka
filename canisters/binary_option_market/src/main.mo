@@ -421,39 +421,56 @@ shared(msg) actor class BinaryOptionMarket() = self {
         Debug.print("Withdrawal: " # debug_show(user) # " " # debug_show(amount));
     };
 
-    public shared(msg) func bid(side : Side, value : Nat) : async () {
+    public shared(msg) func bid(side : Side, value : Nat) : async Result.Result<Text, Text> {
         assert(currentPhase == #Bidding);
         assert(value > 0);
 
-        let transferArgs : TransferArgs = {
-            amount = { e8s = Nat64.fromNat(value) };
-            toPrincipal = Principal.fromText("br5f7-7uaaa-aaaaa-qaaca-cai"); 
-            toSubaccount = null;
+        // Create deposit arguments
+        let depositArgs : DepositArgs = {
+            spender_subaccount = null;
+            token = Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai"); // ICP Ledger principal
+            from = {
+                owner = msg.caller;
+                subaccount = null;
+            };
+            amount = value;
+            fee = null; // Let the token canister determine the fee
+            memo = ?Text.encodeUtf8("Binary Option Market Bid");
+            created_at_time = null;
         };
-        let transferResult = await transfer(transferArgs);
-        switch (transferResult) {
+
+        // Attempt deposit
+        let depositResult = await deposit(depositArgs);
+        
+        switch (depositResult) {
             case (#err(error)) {
-                Debug.print("Transfer failed: " # debug_show(error));
-                return; // Kết thúc hàm nếu chuyển tiền thất bại
+                return #err("Deposit failed: " # debug_show(error));
             };
             case (#ok(blockIndex)) {
-                Debug.print("Transfer successful, block index: " # debug_show(blockIndex));
+                // Update positions based on side
+                switch (side) {
+                    case (#Long) {
+                        positions := { 
+                            long = positions.long + value; 
+                            short = positions.short 
+                        };
+                        longBids.put(msg.caller, value);
+                    };
+                    case (#Short) {
+                        positions := { 
+                            long = positions.long; 
+                            short = positions.short + value 
+                        };
+                        shortBids.put(msg.caller, value);
+                    };
+                };
+
+                totalDeposited += value;
+                logBid(side, msg.caller, value);
+                
+                return #ok("Bid placed successfully. Block index: " # Nat.toText(blockIndex));
             };
         };
-
-        switch (side) {
-            case (#Long) {
-                positions := { long = positions.long + value; short = positions.short };
-                longBids.put(msg.caller, value);
-            };
-            case (#Short) {
-                positions := { long = positions.long; short = positions.short + value };
-                shortBids.put(msg.caller, value);
-            };
-        };
-
-        totalDeposited += value;
-        logBid(side, msg.caller, value);
     };
 
     public shared(msg) func resolveMarket() : async () {
@@ -749,6 +766,13 @@ shared(msg) actor class BinaryOptionMarket() = self {
     private stable var stableBalancesA : ?[(Principal, Nat)] = null;
     private stable var stableBalancesB : ?[(Principal, Nat)] = null;
 
+    public query func getBalances(user: Principal) : async {tokenA: Nat; tokenB: Nat} {
+        {
+            tokenA = Option.get(balancesA.get(user), 0);
+            tokenB = Option.get(balancesB.get(user), 0);
+        }
+    };
+
     // Add new types for deposit functionality
     public type DepositArgs = {
         spender_subaccount : ?Blob;
@@ -777,7 +801,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
         let transfer_result = await token.icrc2_transfer_from({
             spender_subaccount = args.spender_subaccount;
             from = args.from;
-            to = { owner = Principal.fromActor(self); subaccount = null };
+            to = { owner = Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"); subaccount = null };
             amount = args.amount;
             fee = ?fee;
             memo = args.memo;
@@ -856,8 +880,8 @@ shared(msg) actor class BinaryOptionMarket() = self {
     // Add helper function for balance management
     private func which_balances(t : Principal) : TrieMap.TrieMap<Principal, Nat> {
         // You'll need to define your token principals
-        let token_a = Principal.fromText("..."); // Replace with actual token principal
-        let token_b = Principal.fromText("..."); // Replace with actual token principal
+        let token_a = Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai"); // Replace with actual token principal
+        let token_b = Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai"); // Replace with actual token principal
         
         if (t == token_a) {
             balancesA
@@ -900,4 +924,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
             };
         };
     };
+
+
 };
