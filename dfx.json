@@ -5,7 +5,8 @@
       "type": "motoko",
       "dependencies": [
         "icp_ledger_canister",
-        "invoice_canister"
+        "invoice_canister",
+        "internet_identity"
       ]
     },
     "icp_ledger_canister": {

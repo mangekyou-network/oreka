@@ -13,6 +13,8 @@ import { useRouter } from 'next/router';
 import { BinaryOptionMarketService, IBinaryOptionMarketService } from '../service/binary-option-market-service.ts';
 import { Principal } from '@dfinity/principal';
 import { current } from '@reduxjs/toolkit';
+import { AuthClient } from '@dfinity/auth-client';
+import { setActorIdentity } from '../service/actor-locator';
 
 enum Side { Long, Short }
 enum Phase { Bidding, Trading, Maturity, Expiry }
@@ -43,6 +45,9 @@ function Customer() {
     const [reward, setReward] = useState(0); // Số phần thưởng khi người chơi thắng
     const [positions, setPositions] = useState<{ long: number; short: number }>({ long: 0, short: 0 });
 
+    const [authenticated, setAuthenticated] = useState(false);
+
+
     const [availableCoins] = useState<Coin[]>([
         { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "WIF/USD" },
         { value: "0x6fbdb2315678afecb367f032d93f642f64180aa3", label: "ETH/USD" },
@@ -54,6 +59,9 @@ function Customer() {
     const router = useRouter(); // Initialize the router
     const [marketService, setMarketService] = useState<IBinaryOptionMarketService | null>(null);
     const [shouldCheckRewardClaimability, setShouldCheckRewardClaimability] = useState(false);
+    const [identityPrincipal, setIdentityPrincipal] = useState("")
+
+    const authClientPromise = AuthClient.create();
 
 
     // useEffect(() => {
@@ -76,6 +84,10 @@ function Customer() {
     }, [isLoggedIn]);
 
     const fetchMarketDetails = useCallback(async () => {
+
+        const authClient = await authClientPromise;
+        setAuthenticated(await authClient.isAuthenticated());
+
         if (marketService) {
             try {
                 console.log('fetchMarketDetails');
@@ -129,6 +141,48 @@ function Customer() {
             }
         }
     }, [marketService, currentPhase]);
+
+    const setInitialIdentity = async () => {
+        try {
+            const authClient = await authClientPromise;
+            const identity = authClient.getIdentity();
+            const isAuthenticated = await authClient.isAuthenticated()
+            console.log(isAuthenticated)
+
+            if (isAuthenticated)
+                setIdentityPrincipal(identity.getPrincipal().toString())
+
+            setAuthenticated(isAuthenticated);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    useEffect(() => {
+        setInitialIdentity();
+    }, []);
+
+    const signIn = async () => {
+        const authClient = await authClientPromise;
+
+        const internetIdentityUrl = (process.env.NODE_ENV == "production")
+            ? undefined :
+            `http://${process.env.NEXT_PUBLIC_INTERNET_IDENTITY_CANISTER_ID}.localhost:4943`;
+
+        await new Promise((resolve) => {
+            authClient.login({
+                identityProvider: internetIdentityUrl,
+                onSuccess: () => resolve(undefined),
+            });
+        });
+
+        const identity = authClient.getIdentity();
+        setActorIdentity(identity);
+        const isAuthenticated = await authClient.isAuthenticated();
+        console.log(isAuthenticated);
+        setIdentityPrincipal(identity.getPrincipal().toString())
+        setAuthenticated(isAuthenticated);
+    };
 
     useEffect(() => {
         if (currentPhase === Phase.Maturity) {
@@ -207,11 +261,12 @@ function Customer() {
 
             setSelectedSide(side)
 
-            await marketService.bid(
+            const result = await marketService.bid(
                 side === Side.Long ? { Long: null } : { Short: null },
                 amount * 10e8
             );
 
+            console.log(result)
             // Update UI state...
         } catch (error) {
             console.error("Error placing bid:", error);
@@ -225,7 +280,7 @@ function Customer() {
             if (marketService) {
                 fetchMarketDetails();
             }
-        }, 2000);
+        }, 1000);
         return () => clearInterval(interval);
     }, [marketService, currentPhase]);
 
@@ -357,11 +412,11 @@ function Customer() {
                 color="#FEDF56"
                 fontFamily="Arial, sans-serif"
             >
-                {isLoggedIn && (
+                {authenticated && (
                     <HStack spacing={4} justify="space-between" width="100%">
                         <HStack>
                             <Icon as={FaWallet} />
-                            <Text>{abbreviateAddress(walletAddress)}</Text>
+                            <Text>{abbreviateAddress(identityPrincipal)}</Text>
                         </HStack>
                         <HStack>
                             <Icon as={FaEthereum} />
@@ -381,7 +436,7 @@ function Customer() {
                     </HStack>
                 )}
 
-                {isLoggedIn ? (
+                {authenticated ? (
                     <>
                         <Select
                             placeholder="Select Coin"
@@ -490,7 +545,7 @@ function Customer() {
                     </>
                 ) : (
                     <Button
-                        onClick={() => setIsLoggedIn(true)}
+                        onClick={() => signIn()}
                         backgroundColor="#FEDF56"
                         color="#5D3A1A"
                         _hover={{ backgroundColor: "#D5D5D5" }}
@@ -500,7 +555,7 @@ function Customer() {
                         fontSize="xl"
                         w="full"
                     >
-                        Login / Connect Wallet
+                        Login
                     </Button>
                 )}
             </VStack>

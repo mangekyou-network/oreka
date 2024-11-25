@@ -115,10 +115,15 @@ shared(msg) actor class BinaryOptionMarket() = self {
   stable var licensesStable : [(Principal, Bool)] = [];
   var licenses: HashMap.HashMap<Principal, Bool> = HashMap.HashMap(16, Principal.equal, Principal.hash);
 
+    private var balancesA = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
+    private var balancesB = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
+    private stable var stableBalancesA : ?[(Principal, Nat)] = null;
+    private stable var stableBalancesB : ?[(Principal, Nat)] = null;
+
     func balanceOfAccountId(blobAccountId: Blob): async IcpLedger.Tokens {
-      await IcpLedger.account_balance({
+    await IcpLedger.account_balance({
         account = blobAccountId;
-      });
+    });
     };
 
   public func toSubAccount(principal : Principal) : async [Nat8] {
@@ -759,12 +764,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
         };
         return invoiceResult;
     };
-
-    // Add new state variables for token balances
-    private var balancesA = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
-    private var balancesB = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
-    private stable var stableBalancesA : ?[(Principal, Nat)] = null;
-    private stable var stableBalancesB : ?[(Principal, Nat)] = null;
 
     public query func getBalances(user: Principal) : async {tokenA: Nat; tokenB: Nat} {
         {

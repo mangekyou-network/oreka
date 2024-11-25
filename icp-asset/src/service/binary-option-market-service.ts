@@ -1,5 +1,5 @@
 import { Actor } from "@dfinity/agent";
-import { makeBinaryOptionMarketActor } from "./actor-locator";
+import { binaryOptionMarketActor } from "./actor-locator";
 import { Principal } from "@dfinity/principal";
 
 // Interface defining the service contract
@@ -53,7 +53,7 @@ export class BinaryOptionMarketService extends BaseMarketService implements IBin
 
     public async initialize(): Promise<void> {
         if (!this.actor) {
-            this.actor = await makeBinaryOptionMarketActor();
+            this.actor = binaryOptionMarketActor;
         }
     }
 
