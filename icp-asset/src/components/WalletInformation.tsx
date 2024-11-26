@@ -16,12 +16,11 @@ import {
 } from "@chakra-ui/react";
 import React from "react";
 import { fonts } from "../configs/constants";
-import { disconnectMetaMask } from "../contracts/interfaces/EthersConnect";
 import { logoutAction } from "../reduxs/accounts/account.actions";
 import { useAppDispatch, useAppSelector } from "../reduxs/hooks";
 import { numberFormat, showSortAddress } from "../utils";
 
-export interface IProps extends ButtonProps {}
+export interface IProps extends ButtonProps { }
 
 const WalletInformation = ({ ...props }: IProps) => {
   const dispatch = useAppDispatch();
@@ -29,16 +28,15 @@ const WalletInformation = ({ ...props }: IProps) => {
 
   const handleSignOut = async () => {
     try {
-      await disconnectMetaMask();
       dispatch(logoutAction());
-    } catch (er) {}
+    } catch (er) { }
   };
 
   return (
     <Menu>
       {({ isOpen }) => (
         <>
-          <MenuButton            
+          <MenuButton
             isActive={isOpen}
             as={Button}
             variant="outline"
@@ -60,7 +58,7 @@ const WalletInformation = ({ ...props }: IProps) => {
                   variant="with-title"
                   fontSize="10px"
                 >
-                  {numberFormat(point)} tUSD                 
+                  {numberFormat(point)} tUSD
                 </Text>
               </HStack>
             </HStack>

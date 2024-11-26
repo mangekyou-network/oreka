@@ -1,12 +1,10 @@
 import { Button, ButtonProps } from "@chakra-ui/react";
 import React from "react";
-import { connectToMetamask } from "../contracts/interfaces/EthersConnect";
 
-interface IProps extends ButtonProps {}
+interface IProps extends ButtonProps { }
 
 export default function ConnectWallet({ ...props }: IProps) {
   const handleConnect = async () => {
-    await connectToMetamask();
   };
   return (
     <Button

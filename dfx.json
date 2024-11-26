@@ -4,9 +4,7 @@
       "main": "canisters/binary_option_market/src/main.mo",
       "type": "motoko",
       "dependencies": [
-        "icp_ledger_canister",
-        "invoice_canister",
-        "internet_identity"
+        "icp_ledger_canister"
       ]
     },
     "icp_ledger_canister": {

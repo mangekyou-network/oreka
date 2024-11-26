@@ -5,16 +5,15 @@ import {
     Select, HStack, Icon, ScaleFade, Table, Thead, Tbody, Tr, Th, Td
 } from '@chakra-ui/react';
 import { FaEthereum, FaWallet, FaTrophy } from 'react-icons/fa';
-import { ethers } from 'ethers';
-import { BigNumber } from 'ethers';
+
 import { motion, useAnimation } from 'framer-motion';
-import BinaryOptionMarket from '../../../out/BinaryOptionMarket.sol/BinaryOptionMarket.json';
 import { useRouter } from 'next/router';
-import { BinaryOptionMarketService, IBinaryOptionMarketService } from '../service/binary-option-market-service.ts';
+import { BinaryOptionMarketService, IBinaryOptionMarketService } from '../service/binary-option-market-service';
 import { Principal } from '@dfinity/principal';
 import { current } from '@reduxjs/toolkit';
 import { AuthClient } from '@dfinity/auth-client';
-import { setActorIdentity } from '../service/actor-locator';
+import { setActorIdentity, setIcpLedgerIdentity } from '../service/actor-locator';
+import { IIcpLedgerService, IcpLedgerService } from '../service/icp-ledger-service';
 
 enum Side { Long, Short }
 enum Phase { Bidding, Trading, Maturity, Expiry }
@@ -28,7 +27,7 @@ function Customer() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [selectedSide, setSelectedSide] = useState<Side | null>(null);
     const [walletAddress, setWalletAddress] = useState<string>("");
-    const [balance, setBalance] = useState(0);
+    const [balance, setBalance] = useState("0");
     const [contractBalance, setContractBalance] = useState(0);
     const [accumulatedWinnings, setAccumulatedWinnings] = useState(0);
     const [bidAmount, setBidAmount] = useState("");
@@ -57,12 +56,10 @@ function Customer() {
     const toast = useToast();
     const priceControls = useAnimation();
     const router = useRouter(); // Initialize the router
-    const [marketService, setMarketService] = useState<IBinaryOptionMarketService | null>(null);
+    const [marketService, setMarketService] = useState<BinaryOptionMarketService | null>(null);
+    const [ledgerService, setLedgerService] = useState<IcpLedgerService | null>(null);
     const [shouldCheckRewardClaimability, setShouldCheckRewardClaimability] = useState(false);
     const [identityPrincipal, setIdentityPrincipal] = useState("")
-
-    const authClientPromise = AuthClient.create();
-
 
     // useEffect(() => {
     //     setBalance(balanceEth);
@@ -75,31 +72,25 @@ function Customer() {
             const service = BinaryOptionMarketService.getInstance();
             await service.initialize();
             setMarketService(service);
+            const icpLedgerService = IcpLedgerService.getInstance();
+            await icpLedgerService.initialize();
+            setLedgerService(icpLedgerService)
+            console.log(ledgerService)
             console.log("service is set")
         };
 
-        if (isLoggedIn && !marketService) {
+        if (authenticated && !marketService) {
             initService();
         }
-    }, [isLoggedIn]);
+    }, [authenticated]);
 
     const fetchMarketDetails = useCallback(async () => {
-
-        const authClient = await authClientPromise;
-        setAuthenticated(await authClient.isAuthenticated());
-
         if (marketService) {
             try {
-                console.log('fetchMarketDetails');
-                console.log(marketService)
-
-                console.log(marketService);
 
                 const phaseState = await marketService.getCurrentPhase();
-                console.log(phaseState)
                 //@TODO: Make this a function
                 if (('Trading' in phaseState)) {
-                    console.log('Expiry State');
                     setCurrentPhase(Phase.Trading);
                 } else if (('Bidding' in phaseState)) {
                     setCurrentPhase(Phase.Bidding);
@@ -112,25 +103,25 @@ function Customer() {
 
                 const marketDetails = await marketService.getMarketDetails()
 
-                console.log(marketDetails)
 
                 const strikePrice = marketDetails.oracleDetails.strikePrice;
                 const finalPrice = marketDetails.oracleDetails.finalPrice;
 
-                console.log("Strike Price:", strikePrice);
-                console.log("Final Price:", finalPrice);
 
                 setStrikePrice(strikePrice); // Giả định 8 số thập phân
                 setFinalPrice(finalPrice);   // Giả định 8 số thập phân
 
-                const userPosition = await marketService.getUserPosition(Principal.fromText("2vxsx-fae"))
-                console.log(userPosition)
-                setPositions({ long: Number(userPosition.long) / 10e8, short: Number(userPosition.short) / 10e8 })
+                const userPosition = await marketService.getUserPosition(Principal.fromText(identityPrincipal));
+
+                if (userPosition) {
+                    setPositions({ long: Number(userPosition.long) / 10e7, short: Number(userPosition.short) / 10e7 });
+                } else {
+                    console.error("User position is null. Setting default positions.");
+                    setPositions({ long: 0, short: 0 });
+                }
 
                 const totalDeposit = await marketService.getTotalDeposit()
-                setTotalDeposited(Number(totalDeposit) / 10e8)
-
-                console.log(currentPhase);
+                setTotalDeposited(Number(totalDeposit) / 10e7)
 
                 if (currentPhase === Phase.Expiry) {
                     console.log("shouldSetCheckRewardClaimability")
@@ -140,17 +131,33 @@ function Customer() {
                 console.error("Error fetching market details:", error);
             }
         }
-    }, [marketService, currentPhase]);
+
+        if (ledgerService) {
+            const userBalance = await ledgerService.getBalance({ owner: Principal.fromText(identityPrincipal), subaccount: [] })
+            console.log(userBalance);
+            setBalance((Number(userBalance) / 10e7).toFixed(4).toString())
+        }
+    }, [marketService, currentPhase, ledgerService]);
 
     const setInitialIdentity = async () => {
         try {
-            const authClient = await authClientPromise;
+            const authClient = await AuthClient.create();
             const identity = authClient.getIdentity();
             const isAuthenticated = await authClient.isAuthenticated()
-            console.log(isAuthenticated)
 
-            if (isAuthenticated)
-                setIdentityPrincipal(identity.getPrincipal().toString())
+            if (isAuthenticated) {
+                console.log(identity.getPrincipal().toText())
+                setIdentityPrincipal(identity.getPrincipal().toText())
+                await setActorIdentity(identity)
+                await setIcpLedgerIdentity(identity)
+
+                const service = BinaryOptionMarketService.getInstance();
+                await service.initialize();
+                setMarketService(service);
+                const icpLedgerService = IcpLedgerService.getInstance();
+                await icpLedgerService.initialize();
+                setLedgerService(icpLedgerService)
+            }
 
             setAuthenticated(isAuthenticated);
         } catch (error) {
@@ -159,11 +166,14 @@ function Customer() {
     }
 
     useEffect(() => {
-        setInitialIdentity();
+        // prevent server-side rendering
+        if (typeof window !== 'undefined') {
+            setInitialIdentity();
+        }
     }, []);
 
     const signIn = async () => {
-        const authClient = await authClientPromise;
+        const authClient = await AuthClient.create();
 
         const internetIdentityUrl = (process.env.NODE_ENV == "production")
             ? undefined :
@@ -180,7 +190,7 @@ function Customer() {
         setActorIdentity(identity);
         const isAuthenticated = await authClient.isAuthenticated();
         console.log(isAuthenticated);
-        setIdentityPrincipal(identity.getPrincipal().toString())
+        setIdentityPrincipal(identity.getPrincipal().toText())
         setAuthenticated(isAuthenticated);
     };
 
@@ -252,7 +262,7 @@ function Customer() {
     // Hàm đặt cược
     const handleBid = async (side: Side, amount: number) => {
         try {
-            if (!marketService) throw new Error("Service not initialized");
+            if (!marketService || !ledgerService) throw new Error("Service not initialized");
 
             const phase = await marketService.getCurrentPhase();
             if (!('Bidding' in phase)) {
@@ -261,12 +271,22 @@ function Customer() {
 
             setSelectedSide(side)
 
-            const result = await marketService.bid(
+            const approveResult = await ledgerService.approve({
+                spender: {
+                    owner: Principal.fromText(process.env.NEXT_PUBLIC_BINARY_OPTION_MARKET_CANISTER_ID ?? ""),
+                    subaccount: []
+                },
+                amount: BigInt((amount + 0.1) * 10e7)
+            })
+
+            console.log(approveResult)
+
+            const bidResult = await marketService.bid(
                 side === Side.Long ? { Long: null } : { Short: null },
-                amount * 10e8
+                amount * 10e7
             );
 
-            console.log(result)
+            console.log(bidResult)
             // Update UI state...
         } catch (error) {
             console.error("Error placing bid:", error);
@@ -420,7 +440,7 @@ function Customer() {
                         </HStack>
                         <HStack>
                             <Icon as={FaEthereum} />
-                            <Text>{balance.toFixed(4)} ICP</Text>
+                            <Text>{balance} ICP</Text>
                         </HStack>
                         <HStack>
                             {/* <Icon as={FaTrophy} />

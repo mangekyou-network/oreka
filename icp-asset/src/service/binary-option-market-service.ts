@@ -4,7 +4,7 @@ import { Principal } from "@dfinity/principal";
 
 // Interface defining the service contract
 export interface IBinaryOptionMarketService {
-    bid(side: { Long: null } | { Short: null }, amount: number | bigint): Promise<void>;
+    bid(side: { Long: null } | { Short: null }, amount: number | bigint | null): Promise<void>;
     claimReward(): Promise<void>;
     getCurrentPhase(): Promise<{ Bidding: null } | { Trading: null } | { Maturity: null } | { Expiry: null }>;
     getMarketDetails(): Promise<{
@@ -12,8 +12,8 @@ export interface IBinaryOptionMarketService {
         oracleDetails: { finalPrice: number; strikePrice: number };
         positions: { long: bigint; short: bigint };
     }>;
-    getUserPosition(principal: Principal): Promise<{ long: bigint; short: bigint }>;
-    hasUserClaimed(principal: Principal): Promise<boolean>;
+    getUserPosition(principal: Principal | null): Promise<{ long: bigint; short: bigint } | null>;
+    hasUserClaimed(principal: Principal | null): Promise<boolean | null>;
     getContractBalance(): Promise<bigint>;
     getTotalDeposit(): Promise<bigint>;
     getBidders(): Promise<{
@@ -25,7 +25,7 @@ export interface IBinaryOptionMarketService {
 
 // Base abstract class for market services
 abstract class BaseMarketService {
-    protected actor: Actor | null = null;
+    protected actor: any = null;
 
     abstract initialize(): Promise<void>;
     protected assertInitialized(): void {
@@ -34,7 +34,6 @@ abstract class BaseMarketService {
         }
     }
 }
-
 // Concrete implementation
 export class BinaryOptionMarketService extends BaseMarketService implements IBinaryOptionMarketService {
     private static instance: BinaryOptionMarketService;
@@ -42,6 +41,7 @@ export class BinaryOptionMarketService extends BaseMarketService implements IBin
     private constructor() {
         super();
     }
+
 
     // Singleton pattern
     public static getInstance(): BinaryOptionMarketService {
@@ -57,10 +57,11 @@ export class BinaryOptionMarketService extends BaseMarketService implements IBin
         }
     }
 
-    public async bid(side: { Long: null } | { Short: null }, amount: number | bigint): Promise<void> {
+    public async bid(side: { Long: null } | { Short: null }, amount: number | bigint | null): Promise<void> {
         this.assertInitialized();
-        const bidAmount = typeof amount === 'number' ? BigInt(amount) : amount;
-        return await this.actor.bid(side, bidAmount);
+        const bidAmount = amount !== null ? (typeof amount === 'number' ? BigInt(amount) : amount) : null;
+
+        return await this.actor?.bid(side, bidAmount);
     }
 
     public async claimReward(): Promise<void> {
@@ -78,14 +79,20 @@ export class BinaryOptionMarketService extends BaseMarketService implements IBin
         return await this.actor.getMarketDetails();
     }
 
-    public async getUserPosition(principal: Principal) {
+    public async getUserPosition(principal: Principal | null): Promise<{ long: bigint; short: bigint } | null> {
         this.assertInitialized();
-        return await this.actor.getUserPosition(principal);
+        if (this.actor) {
+            return await this.actor.getUserPosition(principal);
+        }
+        throw new Error("Actor is not initialized");
     }
 
-    public async hasUserClaimed(principal: Principal) {
+    public async hasUserClaimed(principal: Principal | null): Promise<boolean | null> {
         this.assertInitialized();
-        return await this.actor.hasUserClaimed(principal);
+        if (this.actor) {
+            return await this.actor.hasUserClaimed(principal);
+        }
+        throw new Error("Actor is not initialized");
     }
 
     public async getContractBalance() {

@@ -18,15 +18,11 @@ import Iter "mo:base/Iter";
 import Char "mo:base/Char";
 import Result "mo:base/Result";
 import Debug "mo:base/Debug";
-import Hex "../../invoice/src/Hex";
-import SHA224 "../../invoice/src/SHA224";
-import AID "../../invoice/src/Account";
 
 
 import Hash "mo:base/Hash";
 
 import IcpLedger "canister:icp_ledger_canister";
-import Invoice "canister:invoice_canister";
 
 import Types "Types";
 
@@ -109,9 +105,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
 
   let ONE_ICP_IN_E8S = 100_000_000;
 
-  stable var invoicesStable : [(Nat, Invoice.Invoice)] = [];
-  var invoices: HashMap.HashMap<Nat, Invoice.Invoice> = HashMap.HashMap(16, Nat.equal, Hash.hash);
-
   stable var licensesStable : [(Principal, Bool)] = [];
   var licenses: HashMap.HashMap<Principal, Bool> = HashMap.HashMap(16, Principal.equal, Principal.hash);
 
@@ -120,55 +113,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
     private stable var stableBalancesA : ?[(Principal, Nat)] = null;
     private stable var stableBalancesB : ?[(Principal, Nat)] = null;
 
-    func balanceOfAccountId(blobAccountId: Blob): async IcpLedger.Tokens {
-    await IcpLedger.account_balance({
-        account = blobAccountId;
-    });
-    };
-
-  public func toSubAccount(principal : Principal) : async [Nat8] {
-    let sub_nat32byte : [Nat8] = Blob.toArray(Text.encodeUtf8(Principal.toText(principal)));
-    let sub_hash_28 : [Nat8] = SHA224.sha224(sub_nat32byte);
-    let sub_hash_32 = Array.append(sub_hash_28, Array.freeze(Array.init<Nat8>(4, 0)));
-    sub_hash_32
-  };
-
-  public func toBlobAccountId(p : Principal, subAccount :  [Nat8]) : async Blob {
-    AID.principalToSubaccount(p);
-  };
-
-   public func toPaymentBlobAccountId(controller: Principal, userPrincipal: Principal): async Blob {
-        await toBlobAccountId(controller, await toSubAccount(userPrincipal));
-    };
-
-// #region create_invoice
-  public shared ({caller}) func create_invoice() : async Invoice.CreateInvoiceResult {
-    let invoiceCreateArgs : Invoice.CreateInvoiceArgs = {
-      amount = ONE_ICP_IN_E8S * 10;
-      token = {
-        symbol = "ICP";
-      };
-      permissions = null;
-      details = ?{
-        description = "Example license certifying status";
-        // JSON string as a blob
-        meta = Text.encodeUtf8(
-          "{\n" #
-          "  \"seller\": \"Invoice Canister Example Dapp\",\n" #
-          "  \"itemized_bill\": [\"Standard License\"],\n" #
-          "}"
-        );
-      };
-    };
-    let invoiceResult = await Invoice.create_invoice(invoiceCreateArgs);
-    switch(invoiceResult){
-      case(#err _) {};
-      case(#ok result) {
-        invoices.put(result.invoice.id, result.invoice);
-      };
-    };
-    return invoiceResult;
-  };
 
   public shared query ({caller}) func check_license_status() : async Bool {
     let licenseResult = licenses.get(caller);
@@ -181,79 +125,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
       };
     };
   };
-
-  public shared query ({caller}) func get_invoice(id: Nat) : async ?Invoice.Invoice {
-    invoices.get(id);
-  };
-
-  public shared ({caller}) func verify_invoice(id: Nat) : async Invoice.VerifyInvoiceResult {
-    assert(currentPhase == #Bidding);
-    
-    let invoiceResult = invoices.get(id);
-    switch(invoiceResult) {
-        case(null) {
-            return #err({
-                kind = #Other;
-                message = ?"Invoice not found";
-            });
-        };
-        case(?invoice) {
-            let verifyResult = await Invoice.verify_invoice({id = invoice.id});
-            switch(verifyResult) {
-                case(#err _) return verifyResult;
-                case(#ok result) {
-                    switch(result) {
-                        case(#Paid {invoice}) {
-                            invoices.put(id, invoice);
-                            
-                            switch(invoice.details) {
-                                case(null) return #err({
-                                    message = ?"Missing invoice details";
-                                    kind = #Other;
-                                });
-                                case(?details) {
-                                    let metaText = Text.decodeUtf8(details.meta);
-
-                                    switch(metaText) {
-                                        case(null) return #err({
-                                            message = ?"Invalid metadata format";
-                                            kind = #Other;
-                                        });
-                                        case(?t) {
-                                            let value = invoice.amount;
-                                            // Extract side from metadata (assuming it contains "Long" or "Short")
-                                            if (Text.contains(t, #text("\"side\": \"Long\""))) {
-                                                positions := { 
-                                                    long = positions.long + value; 
-                                                    short = positions.short 
-                                                };
-                                                longBids.put(caller, value);
-                                            } else if (Text.contains(t, #text("\"side\": \"Short\""))) {
-                                                positions := { 
-                                                    long = positions.long; 
-                                                    short = positions.short + value 
-                                                };
-                                                shortBids.put(caller, value);
-                                            } else {
-                                                return #err({
-                                                    message = ?"Invalid side in metadata";
-                                                    kind = #Other;
-                                                });
-                                            };
-                                            totalDeposited += value;
-                                        };
-                                    };
-                                };
-                            };
-                        };
-                        case(#AlreadyPaid _) {};
-                    };
-                    return verifyResult;
-                };
-            };
-        };
-    };
-};
 
     public shared func transfer(args : TransferArgs) : async Result.Result<IcpLedger.BlockIndex, Text> {
         Debug.print(
@@ -430,6 +301,24 @@ shared(msg) actor class BinaryOptionMarket() = self {
         assert(currentPhase == #Bidding);
         assert(value > 0);
 
+        // Check if user has already bid on the opposite side
+        let hasLongBid = Option.isSome(longBids.get(msg.caller));
+        let hasShortBid = Option.isSome(shortBids.get(msg.caller));
+
+        // Prevent bidding on both sides
+        switch(side) {
+            case (#Long) {
+                if (hasShortBid) {
+                    return #err("Cannot bid on both sides");
+                };
+            };
+            case (#Short) {
+                if (hasLongBid) {
+                    return #err("Cannot bid on both sides");
+                };
+            };
+        };
+
         // Create deposit arguments
         let depositArgs : DepositArgs = {
             spender_subaccount = null;
@@ -439,42 +328,47 @@ shared(msg) actor class BinaryOptionMarket() = self {
                 subaccount = null;
             };
             amount = value;
-            fee = null; // Let the token canister determine the fee
+            fee = null;
             memo = ?Text.encodeUtf8("Binary Option Market Bid");
             created_at_time = null;
         };
 
-        // Attempt deposit
-        let depositResult = await deposit(depositArgs);
-        
-        switch (depositResult) {
-            case (#err(error)) {
-                return #err("Deposit failed: " # debug_show(error));
-            };
-            case (#ok(blockIndex)) {
-                // Update positions based on side
-                switch (side) {
-                    case (#Long) {
-                        positions := { 
-                            long = positions.long + value; 
-                            short = positions.short 
-                        };
-                        longBids.put(msg.caller, value);
-                    };
-                    case (#Short) {
-                        positions := { 
-                            long = positions.long; 
-                            short = positions.short + value 
-                        };
-                        shortBids.put(msg.caller, value);
-                    };
+        try {
+            let depositResult = await deposit(depositArgs);
+            
+            switch (depositResult) {
+                case (#err(error)) {
+                    return #err("Deposit failed: " # debug_show(error));
                 };
+                case (#ok(blockIndex)) {
+                    // Update positions based on side
+                    switch (side) {
+                        case (#Long) {
+                            let currentLongBid = Option.get(longBids.get(msg.caller), 0);
+                            positions := { 
+                                long = positions.long + value; 
+                                short = positions.short 
+                            };
+                            longBids.put(msg.caller, currentLongBid + value);
+                        };
+                        case (#Short) {
+                            let currentShortBid = Option.get(shortBids.get(msg.caller), 0);
+                            positions := { 
+                                long = positions.long; 
+                                short = positions.short + value 
+                            };
+                            shortBids.put(msg.caller, currentShortBid + value);
+                        };
+                    };
 
-                totalDeposited += value;
-                logBid(side, msg.caller, value);
-                
-                return #ok("Bid placed successfully. Block index: " # Nat.toText(blockIndex));
+                    totalDeposited += value;
+                    logBid(side, msg.caller, value);
+                    
+                    return #ok("Bid placed successfully. Block index: " # Nat.toText(blockIndex));
+                };
             };
+        } catch (e) {
+            return #err("Unexpected error: " # Error.message(e));
         };
     };
 
@@ -503,45 +397,88 @@ shared(msg) actor class BinaryOptionMarket() = self {
         assert(resolved);
         assert(Option.isNull(hasClaimed.get(msg.caller)));
 
-        let finalPrice = oracleDetails.finalPrice;
-
-        let winningSide = if (finalPrice >= oracleDetails.strikePrice) #Long else #Short;
-
-        let userDeposit = switch (winningSide) {
-            case (#Long) Option.get(longBids.get(msg.caller), 0);
-            case (#Short) Option.get(shortBids.get(msg.caller), 0);
+        if (not acquireLock("claim")) {
+            throw Error.reject("Claim operation in progress");
         };
 
-        let totalWinningDeposits = switch (winningSide) {
-            case (#Long) positions.long;
-            case (#Short) positions.short;
-        };
+        try {
+            let finalPrice = oracleDetails.finalPrice;
+            let winningSide = if (finalPrice >= oracleDetails.strikePrice) #Long else #Short;
 
-        assert(userDeposit > 0);
-
-        let reward = (userDeposit * totalDeposited) / totalWinningDeposits;
-        let fee = (reward * feePercentage) / 100;
-        let finalReward = if (reward > fee) { reward - fee } else { 0 };
-
-        hasClaimed.put(msg.caller, true);
-
-        // await transferICP(msg.caller, finalReward);
-        let transferArgs : TransferArgs = {
-            amount = { e8s = Nat64.fromNat(finalReward) };
-            toPrincipal = msg.caller;
-            toSubaccount = null; // or specify a subaccount if needed
-        };
-        let transferResult = await transfer(transferArgs);
-        switch (transferResult) {
-            case (#err(error)) {
-                Debug.print("Transfer failed: " # debug_show(error));
+            let userDeposit = switch (winningSide) {
+                case (#Long) Option.get(longBids.get(msg.caller), 0);
+                case (#Short) Option.get(shortBids.get(msg.caller), 0);
             };
-            case (#ok(blockIndex)) {
-                Debug.print("Transfer successful, block index: " # debug_show(blockIndex));
-            };
-        };
 
-        logRewardClaimed(msg.caller, finalReward);
+            let totalWinningDeposits = switch (winningSide) {
+                case (#Long) positions.long;
+                case (#Short) positions.short;
+            };
+
+            assert(userDeposit > 0);
+
+            let reward = (userDeposit * totalDeposited) / totalWinningDeposits;
+            let fee = (reward * feePercentage) / 100;
+            let finalReward = if (reward > fee) { reward - fee } else { 0 };
+
+            // Mark as claimed before transfer to prevent reentrancy
+            hasClaimed.put(msg.caller, true);
+
+            let transferArgs : TransferArgs = {
+                amount = { e8s = Nat64.fromNat(finalReward) };
+                toPrincipal = msg.caller;
+                toSubaccount = null;
+            };
+            let transferResult = await transfer(transferArgs);
+            
+            switch (transferResult) {
+                case (#err(error)) {
+                    // Rollback if transfer fails
+                    hasClaimed.delete(msg.caller);
+                    releaseLock("claim");
+                    Debug.print("Transfer failed: " # debug_show(error));
+                    throw Error.reject("Transfer failed");
+                };
+                case (#ok(blockIndex)) {
+                    // Update all relevant values after successful transfer
+                    switch (winningSide) {
+                        case (#Long) {
+                            // Clear losing short positions
+                            shortBids.delete(msg.caller);
+                            // Update winning long position
+                            longBids.delete(msg.caller);
+                            positions := {
+                                long = positions.long - userDeposit;
+                                short = positions.short;
+                            };
+                        };
+                        case (#Short) {
+                            // Clear losing long positions
+                            longBids.delete(msg.caller);
+                            // Update winning short position
+                            shortBids.delete(msg.caller);
+                            positions := {
+                                long = positions.long;
+                                short = positions.short - userDeposit;
+                            };
+                        };
+                    };
+
+                    // Update total deposited
+                    totalDeposited := totalDeposited - userDeposit;
+                    
+                    // Clear user's balance
+                    balancesA.delete(msg.caller);
+
+                    releaseLock("claim");
+                    Debug.print("Transfer successful, block index: " # debug_show(blockIndex));
+                    logRewardClaimed(msg.caller, finalReward);
+                };
+            };
+        } catch (e) {
+            releaseLock("claim");
+            throw e;
+        };
     };
 
     public shared(msg) func withdraw() : async () {
@@ -576,55 +513,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
     public shared(msg) func changeStrikePrice(newStrikePrice : Float) : async () {
         assert(msg.caller == owner);
         oracleDetails := { strikePrice = newStrikePrice; finalPrice = oracleDetails.finalPrice };
-    };
-
-    public func takeInPayment(controller: Principal, userPrincipal: Principal): async Result.Result<(IcpLedger.BlockIndex, IcpLedger.Tokens), Error> {
-        let subAccount = await toSubAccount(userPrincipal);
-        let paymentBlobAccountId = await toPaymentBlobAccountId(controller, userPrincipal);
-        let accountBalance = await balanceOfAccountId(paymentBlobAccountId);
-
-        if (gas > accountBalance.e8s) return #err(#Transfer(#BadFee({expected_fee={e8s=gas}})));
-
-        let transferAmount = {e8s = accountBalance.e8s-gas};
-
-        let args : IcpLedger.TransferArgs = {
-            memo = 0;
-            amount = transferAmount;
-            fee = {e8s=gas};
-            from_subaccount = ?Blob.fromArray(subAccount);
-            to = await controllerAccountId(controller);
-            created_at_time = null;
-        };
-        
-        switch(await IcpLedger.transfer(args)) {
-            case (#Err(e)) return #err(#Transfer(e));
-            case (#Ok(o)) return #ok(o, transferAmount);
-        };
-    };
-
-    public func takeOutPayment(textAccountId: Text, amountE8s: Nat64): async Result.Result<(IcpLedger.BlockIndex, IcpLedger.Tokens), Error> {
-        if (gas > amountE8s) return #err(#Transfer(#BadFee({expected_fee={e8s=gas}})));
-
-        let blobAccountId = switch (Hex.decode(textAccountId)) {
-            case (#ok(decoded)) Blob.fromArray(decoded);
-            case (#err(_)) return #err(#Other("Bad address"));
-        };
-
-        let transferAmount = {e8s = amountE8s-gas};
-
-        let args : IcpLedger.TransferArgs = {
-            memo = 0;
-            amount = transferAmount;
-            fee = {e8s=gas};
-            from_subaccount = null;
-            to = blobAccountId;
-            created_at_time = null;
-        };
-
-        switch(await IcpLedger.transfer(args)) {
-            case (#Err(e)) return #err(#Transfer(e));
-            case (#Ok(o)) return #ok(o, transferAmount);
-        };
     };
 
     private func controllerAccountId(controller: Principal) : async AccountIdentifier {
@@ -735,36 +623,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
         return f;
     };
 
-    public shared ({caller}) func create_bid_invoice(side: Side, amount: Nat) : async Invoice.CreateInvoiceResult {
-        assert(currentPhase == #Bidding);
-        assert(amount > 0);
-        
-        let invoiceCreateArgs : Invoice.CreateInvoiceArgs = {
-            amount = amount;
-            token = {
-                symbol = "ICP";
-            };
-            permissions = null;
-            details = ?{
-                description = "Binary Option Market Bid";
-                meta = Text.encodeUtf8("{\n" #
-                    "  \"side\": \"" # (switch(side) { case(#Long) "Long"; case(#Short) "Short" }) # "\",\n" #
-                    "  \"bidder\": \"" # Principal.toText(caller) # "\",\n" #
-                    "  \"amount\": " # Nat.toText(amount) # "\n" #
-                    "}")
-            };
-        };
-        
-        let invoiceResult = await Invoice.create_invoice(invoiceCreateArgs);
-        switch(invoiceResult) {
-            case(#err _) {};
-            case(#ok result) {
-                invoices.put(result.invoice.id, result.invoice);
-            };
-        };
-        return invoiceResult;
-    };
-
     public query func getBalances(user: Principal) : async {tokenA: Nat; tokenB: Nat} {
         {
             tokenA = Option.get(balancesA.get(user), 0);
@@ -789,34 +647,49 @@ shared(msg) actor class BinaryOptionMarket() = self {
 
     // Add deposit function
     public shared (msg) func deposit(args : DepositArgs) : async Result.Result<Nat, DepositError> {
-        let token : ICRC.Actor = actor (Principal.toText(args.token));
-        let balances = which_balances(args.token);
-
-        let fee = switch (args.fee) {
-            case (?f) { f };
-            case (null) { await token.icrc1_fee() };
+        if (not acquireLock("deposit")) {
+            return #err(#TransferFromError(#TemporarilyUnavailable));
         };
+        
+        try {
+            let token : ICRC.Actor = actor (Principal.toText(args.token));
+            let balances = which_balances(args.token);
 
-        let transfer_result = await token.icrc2_transfer_from({
-            spender_subaccount = args.spender_subaccount;
-            from = args.from;
-            to = { owner = Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"); subaccount = null };
-            amount = args.amount;
-            fee = ?fee;
-            memo = args.memo;
-            created_at_time = args.created_at_time;
-        });
+            let fee = switch (args.fee) {
+                case (?f) { f };
+                case (null) { await token.icrc1_fee() };
+            };
 
-        let block_height = switch (transfer_result) {
-            case (#Ok(block_height)) { block_height };
-            case (#Err(err)) { return #err(#TransferFromError(err)) };
-        };
+            let transfer_result = await token.icrc2_transfer_from({
+                spender_subaccount = args.spender_subaccount;
+                from = args.from;
+                to = { owner = Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"); subaccount = null };
+                amount = args.amount;
+                fee = ?fee;
+                memo = args.memo;
+                created_at_time = args.created_at_time;
+            });
 
-        let sender = args.from.owner;
-        let old_balance = Option.get(balances.get(sender), 0 : Nat);
-        balances.put(sender, old_balance + args.amount);
+            // Release lock before processing result
+            releaseLock("deposit");
 
-        #ok(block_height)
+            let block_height = switch (transfer_result) {
+                case (#Ok(block_height)) { block_height };
+                case (#Err(err)) { 
+                    return #err(#TransferFromError(err)) 
+                };
+            };
+
+            let sender = args.from.owner;
+            let old_balance = Option.get(balances.get(sender), 0 : Nat);
+            balances.put(sender, old_balance + args.amount);
+
+            #ok(block_height)
+        } catch (e) {
+            // Make sure to release lock in case of any error
+            releaseLock("deposit");
+            #err(#TransferFromError(#TemporarilyUnavailable))
+        }
     };
 
     // Add withdraw functionality
@@ -832,48 +705,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
     public type WithdrawError = {
         #InsufficientFunds : { balance : ICRC.Tokens };
         #TransferError : ICRC.TransferError;
-    };
-
-    public shared (msg) func withdrawICP(args : WithdrawArgs) : async Result.Result<Nat, WithdrawError> {
-        let token : ICRC.Actor = actor (Principal.toText(args.token));
-        let balances = which_balances(args.token);
-
-        let fee = switch (args.fee) {
-            case (?f) { f };
-            case (null) { await token.icrc1_fee() };
-        };
-
-        let old_balance = Option.get(balances.get(msg.caller), 0 : Nat);
-        if (old_balance < args.amount + fee) {
-            return #err(#InsufficientFunds { balance = old_balance });
-        };
-
-        let new_balance = old_balance - args.amount - fee;
-        if (new_balance == 0) {
-            balances.delete(msg.caller);
-        } else {
-            balances.put(msg.caller, new_balance);
-        };
-
-        let transfer_result = await token.icrc1_transfer({
-            from_subaccount = null;
-            to = args.to;
-            amount = args.amount;
-            fee = ?fee;
-            memo = args.memo;
-            created_at_time = args.created_at_time;
-        });
-
-        let block_height = switch (transfer_result) {
-            case (#Ok(block_height)) { block_height };
-            case (#Err(err)) {
-                let b = Option.get(balances.get(msg.caller), 0 : Nat);
-                balances.put(msg.caller, b + args.amount + fee);
-                return #err(#TransferError(err));
-            };
-        };
-
-        #ok(block_height)
     };
 
     // Add helper function for balance management
@@ -894,7 +725,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
     // Update system functions to handle new stable storage
     system func preupgrade() {
         // Existing preupgrade logic
-        invoicesStable := Iter.toArray(invoices.entries());
         
         // Add new balance storage
         stableBalancesA := ?Iter.toArray(balancesA.entries());
@@ -903,8 +733,6 @@ shared(msg) actor class BinaryOptionMarket() = self {
 
     system func postupgrade() {
         // Existing postupgrade logic
-        invoices := HashMap.fromIter(Iter.fromArray(invoicesStable), 16, Nat.equal, Hash.hash);
-        invoicesStable := [];
         
         // Add new balance restoration
         switch (stableBalancesA) {
@@ -924,5 +752,44 @@ shared(msg) actor class BinaryOptionMarket() = self {
         };
     };
 
+    // Simplified lock variables
+    private var isDepositLocked : Bool = false;
+    private var isClaimLocked : Bool = false;
 
+    // Simplified lock functions
+    private func acquireLock(lockType: Text) : Bool {
+        switch(lockType) {
+            case "deposit" {
+                if (isDepositLocked) return false;
+                isDepositLocked := true;
+            };
+            case "claim" {
+                if (isClaimLocked) return false;
+                isClaimLocked := true;
+            };
+            case _ { return false; };
+        };
+        true
+    };
+
+    private func releaseLock(lockType: Text) {
+        switch(lockType) {
+            case "deposit" { isDepositLocked := false; };
+            case "claim" { isClaimLocked := false; };
+            case _ {};
+        };
+    };
+
+    public shared(msg) func forceUnlock() : async () {
+        assert(msg.caller == owner);
+        isDepositLocked := false;
+        isClaimLocked := false;
+    };
+
+    public query func isLocked() : async {deposit: Bool; claim: Bool} {
+        {
+            deposit = isDepositLocked;
+            claim = isClaimLocked;
+        }
+    };
 };
