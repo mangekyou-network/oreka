@@ -22,7 +22,7 @@ import Debug "mo:base/Debug";
 
 import Hash "mo:base/Hash";
 
-import IcpLedger "canister:icp_ledger_canister";
+import IcpLedger "canister:icrc1_ledger";
 
 import Types "Types";
 
@@ -68,11 +68,14 @@ shared(msg) actor class BinaryOptionMarket() = self {
         #InsufficientFunds : { balance: Tokens; };
         #TxTooOld : { allowed_window_nanos: Nat64 };
         #TxCreatedInFuture;
-        #TxDuplicate : { duplicate_of: IcpLedger.BlockIndex; }
+        #TxDuplicate : { duplicate_of: BlockIndex; }
     };
 
     let owner: Principal = msg.caller;
-    private var oracleDetails : OracleDetails = { strikePrice = 0.1; finalPrice = 0.2 };
+    let canisterPrincipal: Principal = Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai");
+    let ledgerPrincipal: Principal = Principal.fromText(
+    "mxzaz-hqaaa-aaaar-qaada-cai");
+    private var oracleDetails : OracleDetails = { strikePrice = 1800; finalPrice = 1810 };
     private var positions : Position = { long = 0; short = 0 };
     private var fees : MarketFees = { poolFee = 0; creatorFee = 0; refundFee = 0 };
     private var totalDeposited : Nat = 0;
@@ -86,17 +89,31 @@ shared(msg) actor class BinaryOptionMarket() = self {
     private var shortBids = HashMap.HashMap<Principal, Nat>(0, Principal.equal, Principal.hash);
     private var hasClaimed = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
 
-    type Tokens = {
-        e8s : Nat64;
-    };
-
-    type TransferArgs = {
-        amount : Tokens;
-        toPrincipal : Principal;
-        toSubaccount : ?IcpLedger.SubAccount;
-    };
+    public type BlockIndex = Nat;
+    public type Subaccount = Blob;
+    // Number of nanoseconds since the UNIX epoch in UTC timezone.
+    public type Timestamp = Nat64;
+    // Number of nanoseconds between two [Timestamp]s.
+    public type Tokens = Nat;
+    public type TxIndex = Nat;
 
     type SubAccount = Blob;
+
+    public type Account = {
+        owner : Principal;
+        subaccount : ?SubAccount;
+    };
+
+
+    type TransferArgs = {
+        from_subaccount : ?SubAccount;
+        to : Account;
+        amount : Tokens;
+        fee : ?Tokens;
+        memo : ?Blob;
+        created_at_time : ?Timestamp;
+    };
+    
     type AccountIdentifier = Blob;
     type Memo = Nat64;
     type TimeStamp = {
@@ -126,27 +143,18 @@ shared(msg) actor class BinaryOptionMarket() = self {
     };
   };
 
-    public shared func transfer(args : TransferArgs) : async Result.Result<IcpLedger.BlockIndex, Text> {
+    public shared func transfer(args : TransferArgs) : async Result.Result<BlockIndex, Text> {
         Debug.print(
             "Transferring "
             # debug_show (args.amount)
             # " tokens to principal "
-            # debug_show (args.toPrincipal)
+            # debug_show (args.to)
             # " subaccount "
-            # debug_show (args.toSubaccount)
+            # debug_show (args.from_subaccount)
         );
 
-        let transferArgs : IcpLedger.TransferArgs = {
-            memo = 0;
-            amount = args.amount;
-            fee = { e8s = 10_000 };
-            from_subaccount = null;
-            to = Principal.toLedgerAccount(args.toPrincipal, args.toSubaccount);
-            created_at_time = null;
-        };
-
         try {
-            let transferResult = await IcpLedger.transfer(transferArgs);
+            let transferResult = await IcpLedger.icrc1_transfer(args);
             switch (transferResult) {
                 case (#Err(transferError)) {
                     return #err("Couldn't transfer funds:\n" # debug_show (transferError));
@@ -317,19 +325,25 @@ shared(msg) actor class BinaryOptionMarket() = self {
                     return #err("Cannot bid on both sides");
                 };
             };
+            case (_) {
+                return #err("Invalid side");
+            };
         };
 
         // Create deposit arguments
         let depositArgs : DepositArgs = {
             spender_subaccount = null;
-            token = Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai"); // ICP Ledger principal
             from = {
                 owner = msg.caller;
                 subaccount = null;
             };
+            to = {
+                owner = canisterPrincipal;
+                subaccount = null;
+            };
             amount = value;
-            fee = null;
-            memo = ?Text.encodeUtf8("Binary Option Market Bid");
+            fee = ?10_000;
+            memo = null;
             created_at_time = null;
         };
 
@@ -340,7 +354,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
                 case (#err(error)) {
                     return #err("Deposit failed: " # debug_show(error));
                 };
-                case (#ok(blockIndex)) {
+                case (#ok(nat)) {
                     // Update positions based on side
                     switch (side) {
                         case (#Long) {
@@ -359,12 +373,18 @@ shared(msg) actor class BinaryOptionMarket() = self {
                             };
                             shortBids.put(msg.caller, currentShortBid + value);
                         };
+                        case (_) {
+                            return #err("Invalid side");
+                        };
                     };
 
                     totalDeposited += value;
                     logBid(side, msg.caller, value);
                     
-                    return #ok("Bid placed successfully. Block index: " # Nat.toText(blockIndex));
+                    return #ok("Bid placed successfully. Block index: " # debug_show(nat));
+                };
+                case (_) {
+                    return #err("Unexpected deposit result");
                 };
             };
         } catch (e) {
@@ -425,9 +445,12 @@ shared(msg) actor class BinaryOptionMarket() = self {
             hasClaimed.put(msg.caller, true);
 
             let transferArgs : TransferArgs = {
-                amount = { e8s = Nat64.fromNat(finalReward) };
-                toPrincipal = msg.caller;
-                toSubaccount = null;
+                amount = finalReward;
+                to = { owner = msg.caller; subaccount = null };
+                from_subaccount = null;
+                fee = null;
+                created_at_time = null;
+                memo = null;
             };
             let transferResult = await transfer(transferArgs);
             
@@ -526,10 +549,9 @@ shared(msg) actor class BinaryOptionMarket() = self {
         Cycles.balance()
     };
 
-    public func getContractBalance() : async Nat64 {
-        let account_id = await IcpLedger.account_identifier({ owner = Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"); subaccount = null });
-        let balance = await IcpLedger.account_balance({ account = account_id });
-        return balance.e8s;
+    public func getContractBalance() : async Nat {
+        let balance = await IcpLedger.icrc1_balance_of({ owner = canisterPrincipal; subaccount = null });
+        return balance;
     };
 
     public query func getTotalDeposit() : async Nat {
@@ -632,13 +654,13 @@ shared(msg) actor class BinaryOptionMarket() = self {
 
     // Add new types for deposit functionality
     public type DepositArgs = {
-        spender_subaccount : ?Blob;
-        token : Principal;
-        from : ICRC.Account;
-        amount : Nat;
+        to : Account;
         fee : ?Nat;
+        spender_subaccount : ?Blob;
+        from : Account;
         memo : ?Blob;
         created_at_time : ?Nat64;
+        amount : Nat;
     };
 
     public type DepositError = {
@@ -646,14 +668,14 @@ shared(msg) actor class BinaryOptionMarket() = self {
     };
 
     // Add deposit function
-    public shared (msg) func deposit(args : DepositArgs) : async Result.Result<Nat, DepositError> {
+    public shared (msg) func deposit(args : DepositArgs) : async Result.Result<Nat, Text> {
         if (not acquireLock("deposit")) {
-            return #err(#TransferFromError(#TemporarilyUnavailable));
+            return #err("The function is locked");
         };
         
         try {
-            let token : ICRC.Actor = actor (Principal.toText(args.token));
-            let balances = which_balances(args.token);
+            let token = IcpLedger;
+            let balances = which_balances(ledgerPrincipal);
 
             let fee = switch (args.fee) {
                 case (?f) { f };
@@ -663,7 +685,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
             let transfer_result = await token.icrc2_transfer_from({
                 spender_subaccount = args.spender_subaccount;
                 from = args.from;
-                to = { owner = Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"); subaccount = null };
+                to = args.to;
                 amount = args.amount;
                 fee = ?fee;
                 memo = args.memo;
@@ -675,20 +697,20 @@ shared(msg) actor class BinaryOptionMarket() = self {
 
             let block_height = switch (transfer_result) {
                 case (#Ok(block_height)) { block_height };
-                case (#Err(err)) { 
-                    return #err(#TransferFromError(err)) 
+                case (#err(e)) { 
+                    return #err("Unexpected error: " # Error.message(e)) 
                 };
             };
 
             let sender = args.from.owner;
-            let old_balance = Option.get(balances.get(sender), 0 : Nat);
+            let old_balance = Option.get(balances.get(sender), 0);
             balances.put(sender, old_balance + args.amount);
 
             #ok(block_height)
         } catch (e) {
             // Make sure to release lock in case of any error
             releaseLock("deposit");
-            #err(#TransferFromError(#TemporarilyUnavailable))
+            #err("Unexpected error: " # Error.message(e));
         }
     };
 
@@ -710,8 +732,8 @@ shared(msg) actor class BinaryOptionMarket() = self {
     // Add helper function for balance management
     private func which_balances(t : Principal) : TrieMap.TrieMap<Principal, Nat> {
         // You'll need to define your token principals
-        let token_a = Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai"); // Replace with actual token principal
-        let token_b = Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai"); // Replace with actual token principal
+        let token_a = ledgerPrincipal; // Replace with actual token principal
+        let token_b = ledgerPrincipal; // Replace with actual token principal
         
         if (t == token_a) {
             balancesA

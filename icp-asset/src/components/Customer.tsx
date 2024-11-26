@@ -276,7 +276,7 @@ function Customer() {
                     owner: Principal.fromText(process.env.NEXT_PUBLIC_BINARY_OPTION_MARKET_CANISTER_ID ?? ""),
                     subaccount: []
                 },
-                amount: BigInt((amount + 0.1) * 10e7)
+                amount: BigInt(amount * 10e7)
             })
 
             console.log(approveResult)
@@ -440,7 +440,7 @@ function Customer() {
                         </HStack>
                         <HStack>
                             <Icon as={FaEthereum} />
-                            <Text>{balance} ICP</Text>
+                            <Text>{balance} ckBTC</Text>
                         </HStack>
                         <HStack>
                             {/* <Icon as={FaTrophy} />
@@ -449,7 +449,7 @@ function Customer() {
                                 <Button onClick={claimReward} size="sm" colorScheme="yellow" variant="outline"
                                     isDisabled={reward === 0}
                                 >
-                                    Claim {reward.toFixed(4)} ICP
+                                    Claim {reward.toFixed(4)} ckBTC
                                 </Button>
                             )}
                         </HStack>
@@ -489,12 +489,12 @@ function Customer() {
                                 </Box>
                                 <VStack spacing={2}>
                                     <Text fontSize="lg">Current Phase: {Phase[currentPhase]}</Text>
-                                    <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ICP</Text>
+                                    <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ckBTC</Text>
                                 </VStack>
 
                                 <VStack spacing={8} width="100%">
                                     <Input
-                                        placeholder="Enter bid amount in ICP"
+                                        placeholder="Enter bid amount in ckBTC"
                                         value={bidAmount}
                                         onChange={(e) => {
                                             const value = e.target.value;
@@ -549,13 +549,13 @@ function Customer() {
                                         <Tbody>
                                             <Tr>
                                                 <Td>Long</Td>
-                                                <Td isNumeric>{positions.long.toFixed(4)} ICP</Td>
-                                                <Td isNumeric>{positions.long.toFixed(4)} ICP</Td>
+                                                <Td isNumeric>{positions.long.toFixed(4)} ckBTC</Td>
+                                                <Td isNumeric>{positions.long.toFixed(4)} ckBTC</Td>
                                             </Tr>
                                             <Tr>
                                                 <Td>Short</Td>
-                                                <Td isNumeric>{positions.short.toFixed(4)} ICP</Td>
-                                                <Td isNumeric>{positions.short.toFixed(4)} ICP</Td>
+                                                <Td isNumeric>{positions.short.toFixed(4)} ckBTC</Td>
+                                                <Td isNumeric>{positions.short.toFixed(4)} ckBTC</Td>
                                             </Tr>
                                         </Tbody>
                                     </Table>
