@@ -22,7 +22,7 @@ import Debug "mo:base/Debug";
 
 import Hash "mo:base/Hash";
 
-import IcpLedger "canister:icrc1_ledger";
+import IcpLedger "canister:icp_ledger_canister";
 
 import Types "Types";
 
@@ -74,7 +74,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
     let owner: Principal = msg.caller;
     let canisterPrincipal: Principal = Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai");
     let ledgerPrincipal: Principal = Principal.fromText(
-    "mxzaz-hqaaa-aaaar-qaada-cai");
+    "br5f7-7uaaa-aaaaa-qaaca-cai");
     private var oracleDetails : OracleDetails = { strikePrice = 1800; finalPrice = 1810 };
     private var positions : Position = { long = 0; short = 0 };
     private var fees : MarketFees = { poolFee = 0; creatorFee = 0; refundFee = 0 };
@@ -677,41 +677,35 @@ shared(msg) actor class BinaryOptionMarket() = self {
             let token = IcpLedger;
             let balances = which_balances(ledgerPrincipal);
 
-            let fee = switch (args.fee) {
-                case (?f) { f };
-                case (null) { await token.icrc1_fee() };
-            };
-
             let transfer_result = await token.icrc2_transfer_from({
                 spender_subaccount = args.spender_subaccount;
                 from = args.from;
                 to = args.to;
                 amount = args.amount;
-                fee = ?fee;
+                fee = args.fee;
                 memo = args.memo;
                 created_at_time = args.created_at_time;
             });
 
-            // Release lock before processing result
+            // Release lock BEFORE processing result to prevent trap
             releaseLock("deposit");
 
-            let block_height = switch (transfer_result) {
-                case (#Ok(block_height)) { block_height };
-                case (#err(e)) { 
-                    return #err("Unexpected error: " # Error.message(e)) 
+            switch (transfer_result) {
+                case (#Ok(block_height)) {
+                    let sender = args.from.owner;
+                    let old_balance = Option.get(balances.get(sender), 0);
+                    balances.put(sender, old_balance + args.amount);
+                    #ok(block_height)
+                };
+                case (#Err(e)) { 
+                    #err("Transfer failed: " # debug_show(e))
                 };
             };
-
-            let sender = args.from.owner;
-            let old_balance = Option.get(balances.get(sender), 0);
-            balances.put(sender, old_balance + args.amount);
-
-            #ok(block_height)
         } catch (e) {
-            // Make sure to release lock in case of any error
+            // Make sure lock is released even if we trap
             releaseLock("deposit");
-            #err("Unexpected error: " # Error.message(e));
-        }
+            #err("Unexpected error: " # Error.message(e))
+        };
     };
 
     // Add withdraw functionality

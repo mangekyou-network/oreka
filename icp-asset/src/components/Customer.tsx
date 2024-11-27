@@ -68,18 +68,21 @@ function Customer() {
 
     useEffect(() => {
         const initService = async () => {
-            console.log("initService")
+            const authClient = await AuthClient.create();
+            const identity = authClient.getIdentity();
+
+            setIcpLedgerIdentity(identity)
+            const icpLedgerService = IcpLedgerService.getInstance();
+            await icpLedgerService.initialize();
+            setLedgerService(icpLedgerService);
+
+            await setActorIdentity(identity)
             const service = BinaryOptionMarketService.getInstance();
             await service.initialize();
             setMarketService(service);
-            const icpLedgerService = IcpLedgerService.getInstance();
-            await icpLedgerService.initialize();
-            setLedgerService(icpLedgerService)
-            console.log(ledgerService)
-            console.log("service is set")
         };
 
-        if (authenticated && !marketService) {
+        if (authenticated && (!marketService || !ledgerService)) {
             initService();
         }
     }, [authenticated]);
@@ -151,12 +154,13 @@ function Customer() {
                 await setActorIdentity(identity)
                 await setIcpLedgerIdentity(identity)
 
+                const icpLedgerService = IcpLedgerService.getInstance();
+                await icpLedgerService.initialize();
+                setLedgerService(icpLedgerService);
+
                 const service = BinaryOptionMarketService.getInstance();
                 await service.initialize();
                 setMarketService(service);
-                const icpLedgerService = IcpLedgerService.getInstance();
-                await icpLedgerService.initialize();
-                setLedgerService(icpLedgerService)
             }
 
             setAuthenticated(isAuthenticated);
@@ -176,7 +180,7 @@ function Customer() {
         const authClient = await AuthClient.create();
 
         const internetIdentityUrl = (process.env.NODE_ENV == "production")
-            ? undefined :
+            ? `https://${process.env.NEXT_PUBLIC_INTERNET_IDENTITY_CANISTER_ID}.ic0.app` :
             `http://${process.env.NEXT_PUBLIC_INTERNET_IDENTITY_CANISTER_ID}.localhost:4943`;
 
         await new Promise((resolve) => {
@@ -276,7 +280,7 @@ function Customer() {
                     owner: Principal.fromText(process.env.NEXT_PUBLIC_BINARY_OPTION_MARKET_CANISTER_ID ?? ""),
                     subaccount: []
                 },
-                amount: BigInt(amount * 10e7)
+                amount: BigInt((amount * 10e7) + 10e7)
             })
 
             console.log(approveResult)
@@ -297,12 +301,12 @@ function Customer() {
     useEffect(() => {
         console.log("current phase is:", currentPhase);
         const interval = setInterval(() => {
-            if (marketService) {
+            if (marketService && ledgerService) {
                 fetchMarketDetails();
             }
         }, 1000);
         return () => clearInterval(interval);
-    }, [marketService, currentPhase]);
+    }, [marketService, ledgerService, currentPhase]);
 
     // Hàm claimReward khi phase là Expiry
     const claimReward = async () => {
@@ -375,7 +379,7 @@ function Customer() {
 
 
                 // generated fake data. @TODO: change this soon after it works
-                const hasClaimed = await marketService?.hasUserClaimed(Principal.fromText("2vxsx-fae"));
+                const hasClaimed = await marketService?.hasUserClaimed(Principal.fromText(identityPrincipal));
 
                 console.log("Has claimed:", hasClaimed); // Log giá trị hasClaimed
 

@@ -4,8 +4,20 @@
       "main": "canisters/binary_option_market/src/main.mo",
       "type": "motoko",
       "dependencies": [
-        "icrc1_ledger"
+        "icp_ledger_canister"
       ]
+    },
+    "binary_option_market_asset": {
+      "dependencies": [
+        "binary_option_market"
+      ],
+      "frontend": {
+        "entrypoint": "icp-asset/out/index.html"
+      },
+      "source": [
+        "icp-asset/out"
+      ],
+      "type": "assets"
     },
     "icp_ledger_canister": {
       "type": "custom",

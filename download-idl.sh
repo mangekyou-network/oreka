@@ -35,6 +35,6 @@ download_candid() {
 
 mkdir -p .dfx/ic/canisters/idl
 # Call the function with the arguments arg1, arg2, and arg3
-for arg in  "icp_ledger_canister" "evm_rpc" "xrc"; do
+for arg in  "icp_ledger_canister" "evm_rpc" "xrc" "internet_identity"; do
     download_candid "$arg"
 done
