@@ -2,7 +2,63 @@
   "canisters": {
     "binary_option_market": {
       "main": "canisters/binary_option_market/src/main.mo",
-      "type": "motoko"
+      "type": "motoko",
+      "dependencies": [
+        "icp_ledger_canister"
+      ]
+    },
+    "binary_option_market_asset": {
+      "dependencies": [
+        "binary_option_market"
+      ],
+      "frontend": {
+        "entrypoint": "icp-asset/out/index.html"
+      },
+      "source": [
+        "icp-asset/out"
+      ],
+      "type": "assets"
+    },
+    "icp_ledger_canister": {
+      "type": "custom",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/aba60ffbc46acfc8990bf4d5685c1360bd7026b9/rs/ledger_suite/icp/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/aba60ffbc46acfc8990bf4d5685c1360bd7026b9/canisters/ledger-canister.wasm.gz",
+      "remote": {
+        "id": {
+          "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+        }
+      }
+    },
+    "internet_identity": {
+      "type": "pull",
+      "id": "rdmx6-jaaaa-aaaaa-aaadq-cai"
+    },
+    "invoice_canister": {
+      "main": "canisters/invoice/src/main.mo",
+      "type": "motoko",
+      "dependencies": [
+        "icp_ledger_canister"
+      ]
+    },
+    "icrc1_ledger": {
+      "type": "custom",
+      "candid": "target/ic/ckbtc_ledger.did",
+      "wasm": "target/ic/ckbtc_ledger.wasm",
+      "remote": {
+        "id": {
+          "ic": "mxzaz-hqaaa-aaaar-qaada-cai"
+        }
+      }
+    },
+    "icrc1_index": {
+      "type": "custom",
+      "candid": "target/ic/ckbtc_index.did",
+      "wasm": "target/ic/ckbtc_index.wasm",
+      "remote": {
+        "id": {
+          "ic": "n5wcd-faaaa-aaaar-qaaea-cai"
+        }
+      }
     },
     "chain_fusion": {
       "candid": "canisters/chain_fusion/chain_fusion.did",
