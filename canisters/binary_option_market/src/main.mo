@@ -29,7 +29,7 @@ import Types "Types";
 import TrieMap "mo:base/TrieMap";
 import ICRC "./ICRC";
 
-shared(msg) actor class BinaryOptionMarket() = self {
+shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimestamp: Nat64) = self {
     type Side = {
         #Long;
         #Short;
@@ -75,7 +75,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
     let canisterPrincipal: Principal = Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai");
     let ledgerPrincipal: Principal = Principal.fromText(
     "br5f7-7uaaa-aaaaa-qaaca-cai");
-    private var oracleDetails : OracleDetails = { strikePrice = 1800; finalPrice = 1810 };
+    private var oracleDetails : OracleDetails = { strikePrice = initStrikePrice; finalPrice = 0 };
     private var positions : Position = { long = 0; short = 0 };
     private var fees : MarketFees = { poolFee = 0; creatorFee = 0; refundFee = 0 };
     private var totalDeposited : Nat = 0;
@@ -143,7 +143,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
     };
   };
 
-    public shared func transfer(args : TransferArgs) : async Result.Result<BlockIndex, Text> {
+    func transfer(args : TransferArgs) : async Result.Result<BlockIndex, Text> {
         Debug.print(
             "Transferring "
             # debug_show (args.amount)
@@ -186,7 +186,32 @@ shared(msg) actor class BinaryOptionMarket() = self {
         transformed;
     };
 
-    public func get_icp_usd_exchange() : async Text {
+    private func proxy(url: Text) : async Types.CanisterHttpResponsePayload {
+
+        let transform_context = {
+            function = transform;
+            context = Blob.fromArray([]);
+        };
+
+        let request : Types.HttpRequestArgs = {
+            url = url;
+            max_response_bytes = null;
+            headers = [];
+            body = null;
+            method = #get;
+            transform = ?transform_context;
+        };
+
+        Cycles.add<system>(220_000_000_000);
+
+        let ic: Types.IC = actor ("aaaaa-aa");
+        let response: Types.CanisterHttpResponsePayload = await ic.http_request(request);
+
+
+        response;
+    };
+
+    private func get_icp_usd_exchange() : async Text {
 
         //1. DECLARE IC MANAGEMENT CANISTER
         //We need this so we can use it to make the HTTP request
@@ -196,19 +221,21 @@ shared(msg) actor class BinaryOptionMarket() = self {
 
         // 2.1 Setup the URL and its query parameters
         let ONE_MINUTE : Nat64 = 60;
-        let start_timestamp : Types.Timestamp = 1682978460; //May 1, 2023 22:01:00 GMT
-        let end_timestamp : Types.Timestamp = 1682978520;//May 1, 2023 22:02:00 GMT
+        let start_timestamp : Types.Timestamp = initEndTimestamp - 60;
+        let end_timestamp : Types.Timestamp = initEndTimestamp;
         let host : Text = "api.exchange.coinbase.com";
-        let url = "https://" # host # "/products/ETH-USD/candles?start=" # Nat64.toText(start_timestamp) # "&end=" # Nat64.toText(start_timestamp) # "&granularity=" # Nat64.toText(ONE_MINUTE);
+        let url = "https://" # host # "/products/ICP-USD/candles?start=" # Nat64.toText(start_timestamp) # "&end=" # Nat64.toText(end_timestamp) # "&granularity=" # Nat64.toText(ONE_MINUTE);
+
+        Debug.print("Request URL: " # url);
 
         // 2.2 prepare headers for the system http_request call
         let request_headers = [
-            { name = "Host"; value = host # ":443" },
+            { name = "Host"; value = ":443" },
             { name = "User-Agent"; value = "exchange_rate_canister" },
         ];
 
         // 2.2.1 Transform context
-        let transform_context : Types.TransformContext = {
+        let transform_context = {
         function = transform;
         context = Blob.fromArray([]);
         };
@@ -217,7 +244,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
         let http_request : Types.HttpRequestArgs = {
             url = url;
             max_response_bytes = null; //optional for request
-            headers = request_headers;
+            headers = [];
             body = null; //optional for request
             method = #get;
             transform = ?transform_context;
@@ -255,6 +282,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
         //  2. Use Blob.decodeUtf8() method to convert the Blob to a ?Text optional 
         //  3. We use a switch to explicitly call out both cases of decoding the Blob into ?Text
         let response_body: Blob = Blob.fromArray(http_response.body);
+
         let decoded_text: Text = switch (Text.decodeUtf8(response_body)) {
             case (null) { "No value returned" };
             case (?y) { y };
@@ -668,7 +696,7 @@ shared(msg) actor class BinaryOptionMarket() = self {
     };
 
     // Add deposit function
-    public shared (msg) func deposit(args : DepositArgs) : async Result.Result<Nat, Text> {
+    private func deposit(args : DepositArgs) : async Result.Result<Nat, Text> {
         if (not acquireLock("deposit")) {
             return #err("The function is locked");
         };

@@ -4,7 +4,7 @@ import { Principal } from "@dfinity/principal";
 
 // Interface defining the service contract
 export interface IBinaryOptionMarketService {
-    bid(side: { Long: null } | { Short: null }, amount: number | bigint | null): Promise<void>;
+    bid(side: { Long: null } | { Short: null }, amount: number | bigint | null): Promise<{ ok: string } | { err: string }>;
     claimReward(): Promise<void>;
     getCurrentPhase(): Promise<{ Bidding: null } | { Trading: null } | { Maturity: null } | { Expiry: null }>;
     getMarketDetails(): Promise<{
@@ -57,7 +57,7 @@ export class BinaryOptionMarketService extends BaseMarketService implements IBin
         }
     }
 
-    public async bid(side: { Long: null } | { Short: null }, amount: number | bigint | null): Promise<void> {
+    public async bid(side: { Long: null } | { Short: null }, amount: number | bigint | null): Promise<{ ok: string } | { err: string }> {
         this.assertInitialized();
         const bidAmount = amount !== null ? (typeof amount === 'number' ? BigInt(amount) : amount) : null;
 

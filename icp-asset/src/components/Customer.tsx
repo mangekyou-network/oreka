@@ -48,7 +48,7 @@ function Customer() {
 
 
     const [availableCoins] = useState<Coin[]>([
-        { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "WIF/USD" },
+        { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "ICP/USD" },
         { value: "0x6fbdb2315678afecb367f032d93f642f64180aa3", label: "ETH/USD" },
         { value: "0x7fbdb2315678afecb367f032d93f642f64180aa3", label: "BTC/USD" }
     ]);
@@ -127,7 +127,6 @@ function Customer() {
                 setTotalDeposited(Number(totalDeposit) / 10e7)
 
                 if (currentPhase === Phase.Expiry) {
-                    console.log("shouldSetCheckRewardClaimability")
                     setShouldCheckRewardClaimability(true);
                 }
             } catch (error: any) {
@@ -180,7 +179,7 @@ function Customer() {
         const authClient = await AuthClient.create();
 
         const internetIdentityUrl = (process.env.NODE_ENV == "production")
-            ? `https://${process.env.NEXT_PUBLIC_INTERNET_IDENTITY_CANISTER_ID}.ic0.app` :
+            ? `https://identity.ic0.app` :
             `http://${process.env.NEXT_PUBLIC_INTERNET_IDENTITY_CANISTER_ID}.localhost:4943`;
 
         await new Promise((resolve) => {
@@ -273,7 +272,6 @@ function Customer() {
                 throw new Error("Market is not in trading phase");
             }
 
-            setSelectedSide(side)
 
             const approveResult = await ledgerService.approve({
                 spender: {
@@ -290,11 +288,32 @@ function Customer() {
                 amount * 10e7
             );
 
+            // @TODO: add a way to handle this
+            if (('ok' in bidResult)) {
+
+                setSelectedSide(side)
+                toast({
+                    title: "Bid successfully!",
+                    description: `You've successfully bidded your side.`,
+                    status: "success",
+                    duration: 3000,
+                    isClosable: true,
+                });
+            }
+
+            if (('err' in bidResult)) {
+                toast({
+                    title: "Bid failed!",
+                    description: `You broke something`,
+                    status: "error",
+                    duration: 3000,
+                    isClosable: true,
+                });
+            }
+
             console.log(bidResult)
-            // Update UI state...
         } catch (error) {
             console.error("Error placing bid:", error);
-            // Handle error...
         }
     };
 
@@ -444,7 +463,7 @@ function Customer() {
                         </HStack>
                         <HStack>
                             <Icon as={FaEthereum} />
-                            <Text>{balance} ckBTC</Text>
+                            <Text>{balance} ICP</Text>
                         </HStack>
                         <HStack>
                             {/* <Icon as={FaTrophy} />
@@ -453,7 +472,7 @@ function Customer() {
                                 <Button onClick={claimReward} size="sm" colorScheme="yellow" variant="outline"
                                     isDisabled={reward === 0}
                                 >
-                                    Claim {reward.toFixed(4)} ckBTC
+                                    Claim {reward.toFixed(4)} ICP
                                 </Button>
                             )}
                         </HStack>
@@ -493,12 +512,12 @@ function Customer() {
                                 </Box>
                                 <VStack spacing={2}>
                                     <Text fontSize="lg">Current Phase: {Phase[currentPhase]}</Text>
-                                    <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ckBTC</Text>
+                                    <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ICP</Text>
                                 </VStack>
 
                                 <VStack spacing={8} width="100%">
                                     <Input
-                                        placeholder="Enter bid amount in ckBTC"
+                                        placeholder="Enter bid amount in ICP"
                                         value={bidAmount}
                                         onChange={(e) => {
                                             const value = e.target.value;
@@ -553,13 +572,13 @@ function Customer() {
                                         <Tbody>
                                             <Tr>
                                                 <Td>Long</Td>
-                                                <Td isNumeric>{positions.long.toFixed(4)} ckBTC</Td>
-                                                <Td isNumeric>{positions.long.toFixed(4)} ckBTC</Td>
+                                                <Td isNumeric>{positions.long.toFixed(4)} ICP</Td>
+                                                <Td isNumeric>{positions.long.toFixed(4)} ICP</Td>
                                             </Tr>
                                             <Tr>
                                                 <Td>Short</Td>
-                                                <Td isNumeric>{positions.short.toFixed(4)} ckBTC</Td>
-                                                <Td isNumeric>{positions.short.toFixed(4)} ckBTC</Td>
+                                                <Td isNumeric>{positions.short.toFixed(4)} ICP</Td>
+                                                <Td isNumeric>{positions.short.toFixed(4)} ICP</Td>
                                             </Tr>
                                         </Tbody>
                                     </Table>
