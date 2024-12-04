@@ -1,4 +1,3 @@
-@orally-network/solidity-sdk/=node_modules/@orally-network/solidity-sdk
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 @chainlink/=lib/chainlink-brownie-contracts/
 ds-test/=lib/solmate/lib/ds-test/src/
@@ -6,3 +5,4 @@ erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/
 forge-std/=lib/forge-std/src/
 openzeppelin-contracts/=lib/openzeppelin-contracts/
 solmate/=lib/solmate/src/
+@pythnetwork/pyth-sdk-solidity/=node_modules/@pythnetwork/pyth-sdk-solidity

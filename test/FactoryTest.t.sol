@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/Factory.sol"; 
-import "../contracts/BinaryOptionMarket.sol";
+import "../contracts/Factory.sol";
+import "../contracts/BinaryOptionMarketPyth.sol";
 contract FactoryTest is Test {
     Factory public factory;
 
@@ -15,12 +15,13 @@ contract FactoryTest is Test {
     function testDeployment() public {
         // Chuẩn bị bytecode cho BinaryOptionMarket với constructor
         address owner = address(this);
+        address fakeAddress = address(this);
         uint strikePrice = 1000;
 
         // Mã hóa bytecode với các tham số constructor
         bytes memory bytecode = abi.encodePacked(
             type(BinaryOptionMarket).creationCode,
-            abi.encode(owner, strikePrice)
+            abi.encode(owner, fakeAddress, fakeAddress, strikePrice)
         );
 
         bytes32 salt = keccak256(abi.encodePacked(owner, block.timestamp));

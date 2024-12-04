@@ -74,8 +74,8 @@ export EVM_ADDRESS=$(dfx canister call chain_fusion get_evm_address | awk -F'"' 
 # deploy the contract passing the chain_fusion canisters evm address to receive the fees and create a couple of new jobs
 forge script script/Coprocessor.s.sol:MyScript --fork-url http://localhost:8545 --broadcast --sig "run(address)" $EVM_ADDRESS
 
-# deploy the contract on sepolia
-forge script script/Coprocessor.s.sol:MyScript --rpc-url https://eth-sepolia.g.alchemy.com/v2/SEem2zNMKSjcqvIsS9gm-_Lw9V5_Ckra --broadcast --sig "run(address)" $EVM_ADDRESS
+# deploy the contract on ethena
+forge script script/Coprocessor.s.sol:MyScript --rpc-url https://eth-sepolia.g.alchemy.com/v2/SEem2zNMKSjcqvIsS9gm-_Lw9V5_Ckra --broadcast --sig "run()"
 
 # test the contract
-cast send $EVM_ADDRESS "startTrading()" 1000000000000000000 --rpc-url http://localhost:8545 --private-key $PRIVATE_KEY
+cast send $EVM_ADDRESS "startTrading()" 1000000000000000000 --rpc-url https://eth-sepolia.g.alchemy.com/v2/SEem2zNMKSjcqvIsS9gm-_Lw9V5_Ckra --private-key $PRIVATE_KEY

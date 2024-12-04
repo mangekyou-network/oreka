@@ -10,4 +10,4 @@ export const fonts = {
   STATE_WIDE: "StateWide",
 };
 export const SMART_CONTRACT_ADDRESS =
-  "0xf38Bd7c94c8C02d2BEEA72b31b7f1Cc30962dD011";
+  "0x57a37BA3e6765062Ef0e0F68cf9B10d642D74733";

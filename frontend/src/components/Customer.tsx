@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useCallback } from 'react'; // Thêm import useCallback
-import { 
-  Flex, Box, Text, Button, VStack, useToast, Input, 
+import {
+  Flex, Box, Text, Button, VStack, useToast, Input,
   Select, HStack, Icon, ScaleFade, Table, Thead, Tbody, Tr, Th, Td
 } from '@chakra-ui/react';
 import { FaEthereum, FaWallet, FaTrophy } from 'react-icons/fa';
@@ -9,10 +9,17 @@ import { ethers } from 'ethers';
 import { BigNumber } from 'ethers';
 import { motion, useAnimation } from 'framer-motion';
 import Owner from './Owner';
-import BinaryOptionMarket from '../../../out/BinaryOptionMarket.sol/BinaryOptionMarket.json';
+import BinaryOptionMarket from '../../../out/BinaryOptionMarketPyth.sol/BinaryOptionMarket.json';
 import { useRouter } from 'next/router';
+import { SMART_CONTRACT_ADDRESS } from '../configs/constants';
+import ERC20_ABI from '../contracts/abis/ERC20.json'; // You'll need to create this file with the ERC20 ABI
 enum Side { Long, Short }
-enum Phase { Bidding, Trading, Maturity, Expiry }
+enum Phase {
+  Starting,    // Initial phase
+  Bidding,     // After startTrading is called
+  Maturity,    // After resolveMarket is called
+  Expiry       // Final phase
+}
 
 interface Coin {
   value: string;
@@ -40,6 +47,9 @@ function Customer() {
   const [reward, setReward] = useState(0); // Số phần thưởng khi người chơi thắng
   const [contract, setContract] = useState<ethers.Contract | null>(null);
   const [positions, setPositions] = useState<{ long: number; short: number }>({ long: 0, short: 0 });
+  const [tokenContract, setTokenContract] = useState<ethers.Contract | null>(null);
+  const [tokenBalance, setTokenBalance] = useState<string>("0");
+  const TOKEN_ADDRESS = "0xf805ce4F96e0EdD6f0b6cd4be22B34b92373d696"; // USDe token address
 
   const [availableCoins] = useState<Coin[]>([
     { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "WIF/USD" },
@@ -52,14 +62,24 @@ function Customer() {
   const router = useRouter(); // Initialize the router
   const [contractAddress, setContractAddress] = useState<string>("");
 
+  const [stakingRewards, setStakingRewards] = useState<{
+    initialAmount: string;
+    currentAmount: string;
+    rewards: string;
+  }>({
+    initialAmount: "0",
+    currentAmount: "0",
+    rewards: "0"
+  });
+
   useEffect(() => {
     // Check if contractAddress is available in the query parameters
     if (router.query.contractAddress) {
       setContractAddress(router.query.contractAddress as string); // Set the contractAddress from query
     } else {
-      setContractAddress("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"); // Default address if not provided
+      setContractAddress(SMART_CONTRACT_ADDRESS); // Default address if not provided
     }
-  }, [router.query.contractAddress]); 
+  }, [router.query.contractAddress]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -81,24 +101,24 @@ function Customer() {
 
   useEffect(() => {
     if (contractAddress) {
-        fetchContractBalance();
+      fetchContractBalance();
     }
-}, [contractAddress]);
+  }, [contractAddress]);
 
-useEffect(() => {
-  const fetchBalance = async () => {
-    if (walletAddress) {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const balanceWei = await provider.getBalance(walletAddress);
-      const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
-      setBalance(balanceEth);
-    }
-  };
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (walletAddress) {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const balanceWei = await provider.getBalance(walletAddress);
+        const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
+        setBalance(balanceEth);
+      }
+    };
 
-  fetchBalance();
-}, [walletAddress, contract]); 
-  
-  
+    fetchBalance();
+  }, [walletAddress, contract]);
+
+
 
   // Kết nối ví MetaMask
   const connectWallet = async () => {
@@ -108,11 +128,20 @@ useEffect(() => {
         const provider = new ethers.providers.Web3Provider(window.ethereum);
         const signer = provider.getSigner();
         const address = await signer.getAddress();
-        const balanceWei = await provider.getBalance(address);
-        const balanceEth = parseFloat(ethers.utils.formatEther(balanceWei));
+
+        // Setup token contract
+        const token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, signer);
+        setTokenContract(token);
+
+        // Get token balance instead of ETH balance
+        const tokenDecimals = await token.decimals();
+        const tokenBalanceBN = await token.balanceOf(address);
+        const formattedBalance = ethers.utils.formatUnits(tokenBalanceBN, tokenDecimals);
+
         setWalletAddress(address);
-        setBalance(balanceEth);
+        setTokenBalance(formattedBalance);
         setIsLoggedIn(true);
+
         toast({
           title: "Wallet connected successfully!",
           description: `Address: ${abbreviateAddress(address)}`,
@@ -124,7 +153,7 @@ useEffect(() => {
         console.error("Failed to connect wallet:", error);
         toast({
           title: "Failed to connect wallet",
-          description: error.message || "Please make sure MetaMask is installed and unlocked.",
+          description: error.message,
           status: "error",
           duration: 5000,
           isClosable: true,
@@ -142,7 +171,7 @@ useEffect(() => {
   };
 
   // Lấy trạng thái từ smart contract
-  
+
   const fetchMarketDetails = useCallback(async () => {
     if (contract) {
       try {
@@ -151,12 +180,13 @@ useEffect(() => {
         const oracleDetails = await contract.oracleDetails();
         const strikePriceBN = BigNumber.from(oracleDetails.strikePrice);
         const finalPriceBN = BigNumber.from(oracleDetails.finalPrice);
-        
+
         console.log("Strike Price:", oracleDetails.strikePrice);
         console.log("Final Price:", oracleDetails.finalPrice);
-        
-        setStrikePrice(parseFloat(ethers.utils.formatUnits(strikePriceBN, 0))); // Giả định 8 số thập phân
-        setFinalPrice(parseFloat(ethers.utils.formatUnits(finalPriceBN, 0)));   // Giả định 8 số thập phân
+
+        // Format prices consistently - assuming 8 decimals from Pyth oracle
+        setStrikePrice(parseFloat(ethers.utils.formatUnits(strikePriceBN, 8)));
+        setFinalPrice(parseFloat(ethers.utils.formatUnits(finalPriceBN, 8)));
       } catch (error: any) {
         console.error("Error fetching market details:", error);
       }
@@ -165,76 +195,69 @@ useEffect(() => {
 
   const fetchContractBalance = async () => {
     try {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const contractBalanceWei = await provider.getBalance(contractAddress); 
-        const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei)); 
-        setContractBalance(contractBalanceEth); // Cập nhật vào state
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const contractBalanceWei = await provider.getBalance(contractAddress);
+      const contractBalanceEth = parseFloat(ethers.utils.formatEther(contractBalanceWei));
+      setContractBalance(contractBalanceEth); // Cập nhật vào state
     } catch (error) {
-        console.error("Failed to fetch contract balance:", error); 
+      console.error("Failed to fetch contract balance:", error);
     }
-};
+  };
 
   // Cập nhật trạng thái và thực hiện đếm ngược
   useEffect(() => {
     if (currentPhase === Phase.Maturity) {
-        setCountdown(5);
-        const countdownInterval = setInterval(() => {
-            setCountdown(prev => {
-                if (prev !== null && prev > 0) {
-                    return prev - 1;
-                } else {
-                    clearInterval(countdownInterval);
-                    setCountdown(null); // Dừng đếm ngược
-
-                    // Chuyển sang giai đoạn Expiry sau khi countdown kết thúc
-                    setCurrentPhase(Phase.Expiry);
-                    return null;  
-                }
-            });
-        }, 1000);
-
-        // Gọi lại fetchMarketDetails sau khi đếm ngược hoàn tất
-        
-          setTimeout(async () => {
+      setCountdown(5);
+      const countdownInterval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev !== null && prev > 0) {
+            return prev - 1;
+          } else {
             clearInterval(countdownInterval);
             setCountdown(null);
-            
-            // Gọi lại fetchMarketDetails để cập nhật thông tin từ contract
-            await fetchMarketDetails(); 
+            setCurrentPhase(Phase.Expiry);
+            return null;
+          }
+        });
+      }, 1000);
 
-            
-            // Kiểm tra kết quả và hiển thị thông báo
-            if (contract) {
-                const oracleDetails = await contract.oracleDetails(); // Gọi hàm oracleDetails
-                const finalPrice = oracleDetails.finalPrice; // Lấy giá trị finalPrice
-                const strikePrice = oracleDetails.strikePrice; // Lấy giá trị strikePrice
+      setTimeout(async () => {
+        clearInterval(countdownInterval);
+        setCountdown(null);
 
-                // Chuyển đổi BigNumber thành số
-                //const finalPriceNumber = finalPrice instanceof BigNumber ? finalPrice.toNumber() : 0;
-                const strikePriceNumber = strikePrice instanceof BigNumber ? strikePrice.toNumber() : 0;
+        await fetchMarketDetails();
 
-                console.log("Final Price:", finalPrice);
-                console.log("Strike Price:", strikePriceNumber);
-                console.log("Selected Side:", selectedSide);
+        if (contract) {
+          const oracleDetails = await contract.oracleDetails();
+          const finalPriceBN = BigNumber.from(oracleDetails.finalPrice);
+          const strikePriceBN = BigNumber.from(oracleDetails.strikePrice);
 
-                // Logic so sánh
-                if (selectedSide === Side.Long && finalPrice >= strikePriceNumber) {
-                    setResultMessage("YOU WIN");
-                } else if (selectedSide === Side.Short && finalPrice <= strikePriceNumber) {
-                    setResultMessage("YOU WIN");
-                } else {
-                    setResultMessage("YOU LOSE");
-                }
-                setShowResult(true);
-                // Ẩn thông báo sau 2 giây
-                setTimeout(() => {
-                    setShowResult(false);
-                }, 2000);
-            }
-        }, 5000);
+          // Format both prices with the same number of decimals
+          const finalPrice = parseFloat(ethers.utils.formatUnits(finalPriceBN, 8));
+          const strikePrice = parseFloat(ethers.utils.formatUnits(strikePriceBN, 8));
+
+          console.log("Formatted Final Price:", finalPrice);
+          console.log("Formatted Strike Price:", strikePrice);
+          console.log("Selected Side:", selectedSide);
+
+          // Now compare the properly formatted numbers
+          if (selectedSide === Side.Long && finalPrice >= strikePrice) {
+            setResultMessage("YOU WIN");
+          } else if (selectedSide === Side.Short && finalPrice <= strikePrice) {
+            setResultMessage("YOU WIN");
+          } else {
+            setResultMessage("YOU LOSE");
+          }
+          setShowResult(true);
+
+          setTimeout(() => {
+            setShowResult(false);
+          }, 2000);
+        }
+      }, 5000);
     }
-}, [currentPhase]);
-  
+  }, [currentPhase]);
+
   // Hàm chọn đồng tiền ảo
   const handleCoinSelect = async (event: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedValue = event.target.value;
@@ -242,15 +265,15 @@ useEffect(() => {
 
     // Gọi hàm để lấy strikePrice ngay khi chọn coin
     if (contract) {
-        const oracleDetails = await contract.oracleDetails();
-        const strikePrice = oracleDetails.strikePrice; // Lấy giá trị strikePrice
-        setStrikePrice(strikePrice instanceof BigNumber ? strikePrice.toNumber() : 0); // Cập nhật strikePrice
+      const oracleDetails = await contract.oracleDetails();
+      const strikePrice = oracleDetails.strikePrice; // Lấy giá trị strikePrice
+      setStrikePrice(strikePrice instanceof BigNumber ? strikePrice.toNumber() : 0); // Cập nhật strikePrice
     }
-};
+  };
 
   // Hàm đặt cược
   const handleBid = async (side: Side) => {
-    if (!bidAmount || Number(bidAmount) <= 0 || !selectedCoin) {
+    if (!bidAmount || Number(bidAmount) <= 0 || !selectedCoin || !tokenContract) {
       toast({
         title: "Invalid Input",
         description: "Please select a coin and enter a valid bid amount.",
@@ -261,20 +284,11 @@ useEffect(() => {
       return;
     }
 
-    setSelectedSide(side);
-    
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const signer = provider.getSigner();
-    const contract = new ethers.Contract(contractAddress, BinaryOptionMarket.abi, signer);
-    setContract(contract);
-
-    const bidAmountWei = ethers.utils.parseEther(bidAmount);
-
     try {
-      if (currentPhase !== Phase.Trading) {
+      if (currentPhase !== Phase.Bidding) {
         toast({
-          title: "Market is not in trading phase",
-          description: "Please wait for the next round.",
+          title: "Market is not in bidding phase",
+          description: "Please wait for the bidding phase to start.",
           status: "error",
           duration: 3000,
           isClosable: true,
@@ -282,26 +296,46 @@ useEffect(() => {
         return;
       }
 
-      // Gửi giao dịch đặt cược lên contract
-      const tx = await contract.bid(side, { value: bidAmountWei });
+      // Convert bid amount to token decimals
+      const tokenDecimals = await tokenContract.decimals();
+      const bidAmountInTokens = ethers.utils.parseUnits(bidAmount, tokenDecimals);
+
+      // First approve the market contract to spend tokens
+      const approveTx = await tokenContract.approve(contractAddress, bidAmountInTokens);
+      await approveTx.wait();
+
+      // Then make the bid
+      const tx = await contract?.bid(side, bidAmountInTokens);
       await tx.wait();
 
-      setBalance(prev => prev - Number(bidAmount));
+      // Store selected side in state
+      setSelectedSide(side);
+
+      // Update balances and positions
+      const newBalance = await tokenContract.balanceOf(walletAddress);
+      setTokenBalance(ethers.utils.formatUnits(newBalance, tokenDecimals));
+
       setPositions(prev => ({
         ...prev,
-        [Side[side].toLowerCase() as keyof typeof prev]: prev[Side[side].toLowerCase() as keyof typeof prev] + Number(bidAmount)
+        [Side[side].toLowerCase() as keyof typeof prev]:
+          prev[Side[side].toLowerCase() as keyof typeof prev] + Number(bidAmount)
       }));
       setTotalDeposited(prev => prev + Number(bidAmount));
 
-      // Chỉ gọi fetchMarketDetails khi cần thiết
       fetchMarketDetails();
-      await fetchContractBalance();
       setBidAmount("");
-    } catch (error) {
+
+      toast({
+        title: "Bid placed successfully!",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
       console.error("Error placing bid:", error);
       toast({
         title: "Error placing bid",
-        description: "An unexpected error occurred. Please try again.",
+        description: error.message,
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -325,17 +359,17 @@ useEffect(() => {
       try {
         const tx = await contract.claimReward();  // Gọi smart contract
         await tx.wait();
-  
+
         const newBalanceWei = await provider.getBalance(walletAddress);
         const newBalanceEth = parseFloat(ethers.utils.formatEther(newBalanceWei));
 
         const fee = (reward * 0.10); // 10% phí
         const finalReward = reward - fee;
-        
+
         setBalance(newBalanceEth);  // Cập nhật lại số dư
         setReward(finalReward);  // Reset lại reward sau khi claim
         setShowClaimButton(false);  // Ẩn nút claim sau khi đã nhận
-        setTotalDeposited(0); 
+        setTotalDeposited(0);
         // Cập nhật lại bảng Long/Short
         await fetchMarketDetails(); // Gọi lại hàm để cập nhật thông tin
         await fetchContractBalance();
@@ -359,8 +393,8 @@ useEffect(() => {
       }
     }
   };
-  
-  
+
+
   const canClaimReward = useCallback(async () => {
     if (contract && currentPhase === Phase.Expiry) {
       console.log("Checking claim eligibility..."); // Log để kiểm tra
@@ -389,7 +423,7 @@ useEffect(() => {
         // Đảm bảo tính toán phần thưởng và cập nhật biến `reward`
         if (!hasClaimed && userDeposit > 0) {
           const totalWinningDeposits = winningSide === Side.Long ? positions.long : positions.short;
-          const calculatedReward = ((userDeposit * totalDeposited) / totalWinningDeposits)*0.90;
+          const calculatedReward = ((userDeposit * totalDeposited) / totalWinningDeposits) * 0.90;
 
           const formattedReward = parseFloat(ethers.utils.formatEther(calculatedReward.toString()));
           setReward(formattedReward);  // Cập nhật phần thưởng
@@ -405,27 +439,86 @@ useEffect(() => {
   }, [contract, currentPhase, walletAddress, selectedSide, positions, totalDeposited]);
 
 
-useEffect(() => {
+  useEffect(() => {
     console.log("Current phase:", currentPhase); // Log giá trị currentPhase
     if (currentPhase === Phase.Expiry) {
       canClaimReward();
     }
   }, [contract, currentPhase, walletAddress, selectedSide]);
 
-    // Reset lại thị trường
-    const resetMarket = () => {
-      setPositions({ long: 0, short: 0 });
-      setTotalDeposited(0);
-      setStrikePrice(0); // Đặt lại giá strikePrice mặc định hoặc giá khởi tạo
-      setFinalPrice(0);
-      setCurrentPhase(Phase.Bidding);
-      priceControls.set({ opacity: 1, color: "#FEDF56" });
-    };
-    
+  // Reset lại thị trường
+  const resetMarket = () => {
+    setPositions({ long: 0, short: 0 });
+    setTotalDeposited(0);
+    setStrikePrice(0); // Đặt lại giá strikePrice mặc định hoặc giá khởi tạo
+    setFinalPrice(0);
+    setCurrentPhase(Phase.Bidding);
+    priceControls.set({ opacity: 1, color: "#FEDF56" });
+  };
 
-    const abbreviateAddress = (address: string) => {
-      return `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+  const abbreviateAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const fetchStakingRewards = async () => {
+    if (contract) {
+      try {
+        // First check if funds are staked
+        const [isStaked, ,] = await contract.getStakingState();
+
+        if (!isStaked) {
+          setStakingRewards({
+            initialAmount: "0",
+            currentAmount: "0",
+            rewards: "0"
+          });
+          return;
+        }
+
+        const [initialAmount, currentAmount, rewards] = await contract.getAccruedRewards();
+
+        // Convert BigNumber to formatted strings
+        setStakingRewards({
+          initialAmount: ethers.utils.formatUnits(initialAmount, 18),
+          currentAmount: ethers.utils.formatUnits(currentAmount, 18),
+          rewards: ethers.utils.formatUnits(rewards, 18)
+        });
+      } catch (error) {
+        console.error("Error fetching staking rewards:", error);
+        // Set default values on error
+        setStakingRewards({
+          initialAmount: "0",
+          currentAmount: "0",
+          rewards: "0"
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (contract) {
+      fetchStakingRewards();
+      const interval = setInterval(fetchStakingRewards, 30000); // Update every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [contract]);
+
+  // Add useEffect to fetch user's selected side when contract is ready
+  useEffect(() => {
+    const fetchUserSelectedSide = async () => {
+      if (contract && walletAddress) {
+        try {
+          const side = await contract.getUserSelectedSide(walletAddress);
+          setSelectedSide(side);
+        } catch (error) {
+          console.error("Error fetching user selected side:", error);
+        }
+      }
     };
+
+    fetchUserSelectedSide();
+  }, [contract, walletAddress]);
 
   return (
     <Flex direction="column" alignItems="center" justifyContent="flex-start" p={6} bg="black" minH="100vh" position="relative">
@@ -444,27 +537,27 @@ useEffect(() => {
             </HStack>
             <HStack>
               <Icon as={FaEthereum} />
-              <Text>{balance.toFixed(4)} ETH</Text>
+              <Text>{parseFloat(tokenBalance).toFixed(2)} USDe</Text>
             </HStack>
             <HStack>
               {/* <Icon as={FaTrophy} />
               <Text>{accumulatedWinnings.toFixed(4)} ETH</Text> */}
-                {reward > 0 && showClaimButton && (
-                  <Button onClick={claimReward} size="sm" colorScheme="yellow" variant="outline"
+              {reward > 0 && showClaimButton && (
+                <Button onClick={claimReward} size="sm" colorScheme="yellow" variant="outline"
                   isDisabled={reward === 0}
-                  >
-                    Claim {reward.toFixed(4)} ETH
-                  </Button>
+                >
+                  Claim {reward.toFixed(4)} USDe
+                </Button>
               )}
-            </HStack> 
+            </HStack>
           </HStack>
         )}
-  
+
         {isLoggedIn ? (
           <>
-            <Select 
-              placeholder="Select Coin" 
-              onChange={handleCoinSelect} 
+            <Select
+              placeholder="Select Coin"
+              onChange={handleCoinSelect}
               value={selectedCoin?.value || ''}
               color="black"
               bg="#FEDF56"
@@ -486,19 +579,19 @@ useEffect(() => {
                   textAlign="center"
                 >
                   <motion.div animate={priceControls}>
-                  <Text fontSize="4xl" fontWeight="bold">
-                    {countdown !== null ? "" : (currentPhase === Phase.Maturity || currentPhase === Phase.Expiry ? finalPrice.toFixed(2) : strikePrice.toFixed(2))}
-                  </Text>
+                    <Text fontSize="4xl" fontWeight="bold">
+                      {countdown !== null ? "" : (currentPhase === Phase.Maturity || currentPhase === Phase.Expiry ? finalPrice.toFixed(2) : strikePrice.toFixed(2))}
+                    </Text>
                   </motion.div>
                 </Box>
                 <VStack spacing={2}>
                   <Text fontSize="lg">Current Phase: {Phase[currentPhase]}</Text>
-                  <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ETH</Text>
+                  <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} USDe</Text>
                 </VStack>
-  
+
                 <VStack spacing={8} width="100%">
                   <Input
-                    placeholder="Enter bid amount in ETH"
+                    placeholder="Enter bid amount in USDe"
                     value={bidAmount}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -512,11 +605,11 @@ useEffect(() => {
                     size="lg"
                     fontSize="xl"
                   />
-  
+
                   <Flex justify="center" gap="100px">
                     <Button
                       onClick={() => handleBid(Side.Long)}
-                      isDisabled={!bidAmount || Number(bidAmount) <= 0 || !selectedCoin || currentPhase !== Phase.Trading}
+                      isDisabled={!bidAmount || Number(bidAmount) <= 0 || !selectedCoin || currentPhase !== Phase.Bidding}
                       bg="#FEDF56"
                       color="black"
                       _hover={{ bg: "#D5D5D5", color: "green", transform: "scale(1.2)" }}
@@ -529,7 +622,7 @@ useEffect(() => {
                     </Button>
                     <Button
                       onClick={() => handleBid(Side.Short)}
-                      isDisabled={!bidAmount || Number(bidAmount) <= 0 || !selectedCoin || currentPhase !== Phase.Trading}
+                      isDisabled={!bidAmount || Number(bidAmount) <= 0 || !selectedCoin || currentPhase !== Phase.Bidding}
                       bg="#FEDF56"
                       color="black"
                       _hover={{ bg: "#D5D5D5", color: "red", transform: "scale(1.2)" }}
@@ -541,7 +634,7 @@ useEffect(() => {
                       Down
                     </Button>
                   </Flex>
-  
+
                   <Table variant="simple" colorScheme="yellow">
                     <Thead>
                       <Tr>
@@ -553,13 +646,13 @@ useEffect(() => {
                     <Tbody>
                       <Tr>
                         <Td>Long</Td>
-                        <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
-                        <Td isNumeric>{positions.long.toFixed(4)} ETH</Td>
+                        <Td isNumeric>{positions.long.toFixed(4)} USDe</Td>
+                        <Td isNumeric>{positions.long.toFixed(4)} USDe</Td>
                       </Tr>
                       <Tr>
                         <Td>Short</Td>
-                        <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
-                        <Td isNumeric>{positions.short.toFixed(4)} ETH</Td>
+                        <Td isNumeric>{positions.short.toFixed(4)} USDe</Td>
+                        <Td isNumeric>{positions.short.toFixed(4)} USDe</Td>
                       </Tr>
                     </Tbody>
                   </Table>
@@ -583,7 +676,7 @@ useEffect(() => {
           </Button>
         )}
       </VStack>
-      
+
       {countdown !== null && (
         <Box
           position="fixed"
@@ -618,6 +711,35 @@ useEffect(() => {
           {resultMessage}
         </Box>
       </ScaleFade>
+      {isLoggedIn && stakingRewards.initialAmount !== "0" && (
+        <Box
+          border="1px solid #FEDF56"
+          borderRadius="lg"
+          p={4}
+          mt={4}
+          width="100%"
+        >
+          <Text fontSize="lg" fontWeight="bold" mb={3}>Staking Rewards</Text>
+          <Table variant="simple" colorScheme="yellow" size="sm">
+            <Tbody>
+              <Tr>
+                <Td>Initial Stake</Td>
+                <Td isNumeric>{parseFloat(stakingRewards.initialAmount).toFixed(4)} USDe</Td>
+              </Tr>
+              <Tr>
+                <Td>Current Value</Td>
+                <Td isNumeric>{parseFloat(stakingRewards.currentAmount).toFixed(4)} USDe</Td>
+              </Tr>
+              <Tr>
+                <Td>Accrued Rewards</Td>
+                <Td isNumeric color={parseFloat(stakingRewards.rewards) > 0 ? "green.400" : undefined}>
+                  {parseFloat(stakingRewards.rewards).toFixed(4)} USDe
+                </Td>
+              </Tr>
+            </Tbody>
+          </Table>
+        </Box>
+      )}
     </Flex>
   );
 }
