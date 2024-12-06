@@ -1,47 +1,126 @@
-# Binary Option
+# ICP Binary Option Market 🎯
 
-This repository contains a simple binary option game utilizing Oreka Network Data Feeds.
-Data feeds are deployed on Anvil Testnet, youd should add it to the wallet's networks config before running it.
+A decentralized binary options trading platform built on the Internet Computer Protocol (ICP), allowing users to make price direction predictions on cryptocurrency pairs.
 
-## What is Binary Option Game?
+## Overview 🌟
 
-"Binary Option" is a proof of concept betting game that utilizes price data submitted to Oreka Oracle Network.
-Players start by get a simulated bidding of 100ETH, aiming to accurately predict the direction (up or down) of cryptocurrency price movement.
-Or, you can use [this template](../contracts/BinaryOptionMarket.sol) to spin up your real Binary Option smart contract.
+The Binary Options Market is a proof-of-concept prediction market that leverages ICP's infrastructure to create a transparent and decentralized trading environment. Users can participate by predicting whether an asset's price will go up or down within a specified timeframe.
 
-Correct predictions earn players 5 ETH while incorrect ones result in a loss of 5 ETH.
-Asset prices are fetched from the [Exchange Rate Cannister](https://github.com/dfinity/exchange-rate-canister) and compared with the same asset's price after 30 seconds.
-Users can select any supported data feed to participate in the game.
+### Key Features
+- 📈 Resolved with price feeds via HTTP Outcalls
+- ⚡ 30-second trading windows
+- 🎲 Entire-pool reward/loss per correct/incorrect prediction
+- 🔒 Secure identity management via Internet Identity
+- 💱 Support for multiple cryptocurrency pairs
 
-## Development
+## Demo 🎮
 
-Start Anvil in the root repo
+![Trading Interface](./docs/images/trading-interface.gif)
+![Price Feed](./docs/images/price-feed.png)
 
+## Architecture 📐
+
+The project consists of two main components:
+
+1. **Binary Option Market Canister** (`canisters/binary_option_market/`)
+   - Core trading logic
+   - HTTP Outcalls for price feeds
+   - State management
+   - Account management
+
+2. **Frontend** (`icp-asset/`)
+   - React/Next.js interface
+   - Internet Identity integration
+   - Real-time updates
+
+## Technical Stack 🛠
+
+- **Backend**: Motoko
+- **Frontend**: Next.js, TypeScript, Chakra UI
+- **Identity**: Internet Identity
+- **Price Feeds**: HTTP Outcalls
+- **State Management**: Redux Toolkit
+
+## Getting Started 🚀
+
+### Prerequisites
+- dfx CLI
+- Node.js >= 14
+- NPM
+
+### Local Development
+
+1. Start the local replica:
+
+```bash
+dfx start --clean
 ```
-cd .. 
-./deploy.sh
-cd frontend/
+
+2. Deploy the Binary Option Market canister with initial arguments:
+
+```bash
+# Deploy with custom initial balance and bet amount
+dfx deploy binary_option_market --argument '(record { 
+  initial_balance = 100_000_000;
+  bet_amount = 5_000_000 
+})'
 ```
 
-Install dependencies.
+3. Install frontend dependencies:
 
-```shell
-yarn install
+```bash
+cd icp-asset
+npm install --legacy-peer-deps
 ```
 
-Next, you can start the frontend in a development mode.
+4. Start the development server:
 
-```shell
-yarn dev
+```bash
+npm run dev
 ```
 
-Or you can build it first, and then launch in a production mode.
+## Project Status 📊
 
-```shell
-yarn build
-yarn start
-```
+Current Features:
+- ✅ Core prediction market contracts
+- ✅ HTTP Outcalls price feed integration
+- ✅ Basic trading interface
+- ✅ Internet Identity integration
 
-## License
+Roadmap:
+- 🔄 Advanced trading features
+- 🔄 Multi-asset support
+- 🔄 Shared liquidity infrastructure
 
-[MIT License](LICENSE)
+## Future Development 🔮
+
+We have exciting plans to enhance the platform:
+
+1. **ChainFusion Integration**
+   - Implementation of ChainFusion as an oracle solution
+   - Support for EVM-compatible smart contracts
+
+2. **Shared Liquidity Infrastructure**
+   - Cross-chain liquidity pools
+   - Unified prediction market ecosystem
+
+## Contributing 🤝
+
+Contributions are welcome! Please read our contributing guidelines before submitting PRs.
+
+## License 📄
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments 🙏
+
+- DFINITY Foundation
+- Internet Computer Community
+
+## Contact 📧
+
+For questions and support, please open an issue or reach out to the maintainers.
+
+---
+
+Built with ❤️ for the Internet Computer ecosystem.
