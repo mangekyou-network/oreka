@@ -4,108 +4,106 @@ import Int "mo:base/Int";
 import Int64 "mo:base/Int64";
 import Nat "mo:base/Nat";
 import Float "mo:base/Float";
-import HashMap "mo:base/HashMap";
 import Error "mo:base/Error";
 import Option "mo:base/Option";
 import Blob "mo:base/Blob";
-import Cycles "mo:base/ExperimentalCycles";
 import Array "mo:base/Array";
-import Nat8 "mo:base/Nat8";
-import Nat64 "mo:base/Nat64";
-import Nat32 "mo:base/Nat32";
 import Text "mo:base/Text";
 import Iter "mo:base/Iter";
 import Char "mo:base/Char";
 import Result "mo:base/Result";
 import Debug "mo:base/Debug";
-
-
 import Hash "mo:base/Hash";
+
+import Nat8 "mo:base/Nat8";
+import Nat64 "mo:base/Nat64";
+import Nat32 "mo:base/Nat32";
+
+import HashMap "mo:base/HashMap";
+import TrieMap "mo:base/TrieMap";
+
+import Cycles "mo:base/ExperimentalCycles";
 
 import IcpLedger "canister:icp_ledger_canister";
 
 import Types "Types";
-
-import TrieMap "mo:base/TrieMap";
 import ICRC "./ICRC";
 
-shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimestamp: Nat64) = self {
-    type Side = {
+/// @title Binary Option Market
+/// @notice A decentralized binary options trading platform
+/// @dev All function calls are currently being implemented without side effects
+shared(msg) actor class BinaryOptionMarket(
+    initStrikePrice: Float,
+    initEndTimestamp: Nat64
+) = self {
+
+    // ============ Type Declarations ============
+
+    /// @notice Trading sides available in the market
+    public type Side = {
         #Long;
         #Short;
     };
 
-    type Phase = {
+    /// @notice Market phases
+    public type Phase = {
         #Bidding;
         #Trading;
         #Maturity;
         #Expiry;
     };
 
-    type OracleDetails = {
+    /// @notice Oracle price information
+    public type OracleDetails = {
         strikePrice : Float;
         finalPrice : Float;
     };
 
-    type Position = {
+    /// @notice Market position information
+    public type Position = {
         long : Nat;
         short : Nat;
     };
 
-    type MarketFees = {
+    /// @notice Fee structure for the market
+    public type MarketFees = {
         poolFee : Nat;
         creatorFee : Nat;
         refundFee : Nat;
     };
 
+    /// @notice Error types for the market
     public type Error = {
         #Transfer: TransferError;
         #Other: Text;
     };
 
+    /// @notice Transfer-specific errors
     public type TransferError = {
-        #BadFee : { expected_fee : Tokens; };
-        #InsufficientFunds : { balance: Tokens; };
+        #BadFee : { expected_fee : Tokens };
+        #InsufficientFunds : { balance: Tokens };
         #TxTooOld : { allowed_window_nanos: Nat64 };
         #TxCreatedInFuture;
-        #TxDuplicate : { duplicate_of: BlockIndex; }
+        #TxDuplicate : { duplicate_of: BlockIndex };
     };
 
-    let owner: Principal = msg.caller;
-    let canisterPrincipal: Principal = Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai");
-    let ledgerPrincipal: Principal = Principal.fromText(
-    "br5f7-7uaaa-aaaaa-qaaca-cai");
-    private var oracleDetails : OracleDetails = { strikePrice = initStrikePrice; finalPrice = 0 };
-    private var positions : Position = { long = 0; short = 0 };
-    private var fees : MarketFees = { poolFee = 0; creatorFee = 0; refundFee = 0 };
-    private var totalDeposited : Nat = 0;
-    private var resolved : Bool = false;
-    private var currentPhase : Phase = #Trading;
-    private let feePercentage : Nat = 10; // 10% fee on rewards
-
-    let gas: Nat64 = 10_000;
-
-    private var longBids = HashMap.HashMap<Principal, Nat>(0, Principal.equal, Principal.hash);
-    private var shortBids = HashMap.HashMap<Principal, Nat>(0, Principal.equal, Principal.hash);
-    private var hasClaimed = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
+    // ============ Core Types ============
 
     public type BlockIndex = Nat;
     public type Subaccount = Blob;
-    // Number of nanoseconds since the UNIX epoch in UTC timezone.
-    public type Timestamp = Nat64;
-    // Number of nanoseconds between two [Timestamp]s.
+    public type Timestamp = Nat64;  // Number of nanoseconds since the UNIX epoch in UTC timezone
     public type Tokens = Nat;
     public type TxIndex = Nat;
-
-    type SubAccount = Blob;
+    public type SubAccount = Blob;
+    public type AccountIdentifier = Blob;
+    public type Memo = Nat64;
 
     public type Account = {
         owner : Principal;
         subaccount : ?SubAccount;
     };
 
-
-    type TransferArgs = {
+    public type TransferArgs = {
         from_subaccount : ?SubAccount;
         to : Account;
         amount : Tokens;
@@ -113,63 +111,149 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         memo : ?Blob;
         created_at_time : ?Timestamp;
     };
-    
-    type AccountIdentifier = Blob;
-    type Memo = Nat64;
-    type TimeStamp = {
+
+    public type TimeStamp = {
         timestamp_nanos: Nat64;
     };
 
-  let ONE_ICP_IN_E8S = 100_000_000;
+    public type DepositArgs = {
+        to : Account;
+        fee : ?Nat;
+        spender_subaccount : ?Blob;
+        from : Account;
+        memo : ?Blob;
+        created_at_time : ?Nat64;
+        amount : Nat;
+    };
 
-  stable var licensesStable : [(Principal, Bool)] = [];
-  var licenses: HashMap.HashMap<Principal, Bool> = HashMap.HashMap(16, Principal.equal, Principal.hash);
+    public type DepositError = {
+        #TransferFromError : ICRC.TransferFromError;
+    };
 
+    public type WithdrawArgs = {
+        token : Principal;
+        to : ICRC.Account;
+        amount : Nat;
+        fee : ?Nat;
+        memo : ?Blob;
+        created_at_time : ?Nat64;
+    };
+
+    public type WithdrawError = {
+        #InsufficientFunds : { balance : ICRC.Tokens };
+        #TransferError : ICRC.TransferError;
+    };
+
+    // ============ Constants ============
+
+    private let OWNER : Principal = msg.caller;
+    private let CANISTER_PRINCIPAL : Principal = Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai");
+    private let LEDGER_PRINCIPAL : Principal = Principal.fromText("br5f7-7uaaa-aaaaa-qaaca-cai");
+    private let FEE_PERCENTAGE : Nat = 10; // 10% fee on rewards
+    private let GAS : Nat64 = 10_000;
+    private let ONE_ICP_IN_E8S : Nat = 100_000_000;
+
+    // ============ State Variables ============
+
+    private var oracleDetails : OracleDetails = { 
+        strikePrice = initStrikePrice; 
+        finalPrice = 0 
+    };
+    private var positions : Position = { 
+        long = 0; 
+        short = 0 
+    };
+    private var fees : MarketFees = { 
+        poolFee = 0; 
+        creatorFee = 0; 
+        refundFee = 0 
+    };
+    private var totalDeposited : Nat = 0;
+    private var resolved : Bool = false;
+    private var currentPhase : Phase = #Trading;
+
+    // ============ Data Structures ============
+
+    private var longBids = HashMap.HashMap<Principal, Nat>(0, Principal.equal, Principal.hash);
+    private var shortBids = HashMap.HashMap<Principal, Nat>(0, Principal.equal, Principal.hash);
+    private var hasClaimed = HashMap.HashMap<Principal, Bool>(0, Principal.equal, Principal.hash);
     private var balancesA = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
     private var balancesB = TrieMap.TrieMap<Principal, Nat>(Principal.equal, Principal.hash);
-    private stable var stableBalancesA : ?[(Principal, Nat)] = null;
-    private stable var stableBalancesB : ?[(Principal, Nat)] = null;
 
+    // ============ Stable Storage ============
 
-  public shared query ({caller}) func check_license_status() : async Bool {
-    let licenseResult = licenses.get(caller);
-    switch(licenseResult) {
-      case(null){
-        return false;
-      };
-      case (? license){
-        return license;
-      };
-    };
-  };
+    stable var licensesStable : [(Principal, Bool)] = [];
+    stable var stableBalancesA : ?[(Principal, Nat)] = null;
+    stable var stableBalancesB : ?[(Principal, Nat)] = null;
 
-    func transfer(args : TransferArgs) : async Result.Result<BlockIndex, Text> {
-        Debug.print(
-            "Transferring "
-            # debug_show (args.amount)
-            # " tokens to principal "
-            # debug_show (args.to)
-            # " subaccount "
-            # debug_show (args.from_subaccount)
-        );
+    var licenses : HashMap.HashMap<Principal, Bool> = HashMap.HashMap(16, Principal.equal, Principal.hash);
 
-        try {
-            let transferResult = await IcpLedger.icrc1_transfer(args);
-            switch (transferResult) {
-                case (#Err(transferError)) {
-                    return #err("Couldn't transfer funds:\n" # debug_show (transferError));
+    // ============ Lock Management ============
+
+    private var isDepositLocked : Bool = false;
+    private var isClaimLocked : Bool = false;
+
+    // ============ Utility Functions ============
+
+    /// @notice Converts text to natural number
+    /// @param txt The text to convert
+    /// @return The natural number
+    private func textToNat(txt : Text) : async Nat {
+        assert(txt.size() > 0);
+        let chars = txt.chars();
+
+        var num : Nat = 0;
+        for (c in chars) {
+            switch (Char.toNat32(c)) {
+                case (d) {
+                    if (d >= 48 and d <= 57) {
+                        num := num * 10 + Nat32.toNat(d - 48);
+                    } else {
+                        Debug.print("Invalid character in input: " # debug_show(c));
+                        assert(false);
+                    };
                 };
-                case (#Ok(blockIndex)) { return #ok blockIndex };
             };
-        } catch (error) {
-            return #err("Reject message: " # Error.message(error));
         };
+        num
     };
 
-    public query func getOwner() : async Principal {
-        owner
+    /// @notice Converts text to float
+    /// @param t The text to convert
+    /// @return The float value
+    public func textToFloat(t : Text) : async Float {
+        var i : Float = 1;
+        var f : Float = 0;
+        var isDecimal : Bool = false;
+
+        for (c in t.chars()) {
+            if (Char.isDigit(c)) {
+                let charToNat : Nat64 = Nat64.fromNat(Nat32.toNat(Char.toNat32(c) -48));
+                let natToFloat : Float = Float.fromInt64(Int64.fromNat64(charToNat));
+                if (isDecimal) {
+                    let n : Float = natToFloat / Float.pow(10, i);
+                    f := f + n;
+                } else {
+                    f := f * 10 + natToFloat;
+                };
+                i := i + 1;
+            } else {
+                if (Char.equal(c, '.') or Char.equal(c, ',')) {
+                    f := f / Float.pow(10, i); // Force decimal
+                    f := f * Float.pow(10, i); // Correction
+                    isDecimal := true;
+                    i := 1;
+                } else {
+                    throw Error.reject("NaN");
+                };
+            };
+        };
+        return f;
     };
 
+    /// @notice Transforms HTTP response for security
+    /// @param raw The raw response to transform
+    /// @return The transformed response
     public query func transform(raw : Types.TransformArgs) : async Types.CanisterHttpResponsePayload {
         let transformed : Types.CanisterHttpResponsePayload = {
             status = raw.response.status;
@@ -183,140 +267,56 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
                 { name = "X-Content-Type-Options"; value = "nosniff" },
             ];
         };
-        transformed;
+        transformed
     };
 
-    private func proxy(url: Text) : async Types.CanisterHttpResponsePayload {
+    // ============ Lock Management Functions ============
 
-        let transform_context = {
-            function = transform;
-            context = Blob.fromArray([]);
+    /// @notice Acquires a lock for a specific operation
+    /// @param lockType The type of lock to acquire
+    /// @return Whether the lock was successfully acquired
+    private func acquireLock(lockType: Text) : Bool {
+        switch(lockType) {
+            case "deposit" {
+                if (isDepositLocked) return false;
+                isDepositLocked := true;
+            };
+            case "claim" {
+                if (isClaimLocked) return false;
+                isClaimLocked := true;
+            };
+            case _ { return false; };
         };
-
-        let request : Types.HttpRequestArgs = {
-            url = url;
-            max_response_bytes = null;
-            headers = [];
-            body = null;
-            method = #get;
-            transform = ?transform_context;
-        };
-
-        Cycles.add<system>(220_000_000_000);
-
-        let ic: Types.IC = actor ("aaaaa-aa");
-        let response: Types.CanisterHttpResponsePayload = await ic.http_request(request);
-
-
-        response;
+        true
     };
 
-    private func get_icp_usd_exchange() : async Text {
-
-        //1. DECLARE IC MANAGEMENT CANISTER
-        //We need this so we can use it to make the HTTP request
-        let ic : Types.IC = actor ("aaaaa-aa");
-
-        //2. SETUP ARGUMENTS FOR HTTP GET request
-
-        // 2.1 Setup the URL and its query parameters
-        let ONE_MINUTE : Nat64 = 60;
-        let start_timestamp : Types.Timestamp = initEndTimestamp - 60;
-        let end_timestamp : Types.Timestamp = initEndTimestamp;
-        let host : Text = "api.exchange.coinbase.com";
-        let url = "https://" # host # "/products/ICP-USD/candles?start=" # Nat64.toText(start_timestamp) # "&end=" # Nat64.toText(end_timestamp) # "&granularity=" # Nat64.toText(ONE_MINUTE);
-
-        Debug.print("Request URL: " # url);
-
-        // 2.2 prepare headers for the system http_request call
-        let request_headers = [
-            { name = "Host"; value = ":443" },
-            { name = "User-Agent"; value = "exchange_rate_canister" },
-        ];
-
-        // 2.2.1 Transform context
-        let transform_context = {
-        function = transform;
-        context = Blob.fromArray([]);
+    /// @notice Releases a lock for a specific operation
+    /// @param lockType The type of lock to release
+    private func releaseLock(lockType: Text) {
+        switch(lockType) {
+            case "deposit" { isDepositLocked := false; };
+            case "claim" { isClaimLocked := false; };
+            case _ {};
         };
-
-        // 2.3 The HTTP request
-        let http_request : Types.HttpRequestArgs = {
-            url = url;
-            max_response_bytes = null; //optional for request
-            headers = [];
-            body = null; //optional for request
-            method = #get;
-            transform = ?transform_context;
-        };
-
-        //3. ADD CYCLES TO PAY FOR HTTP REQUEST
-
-        //The IC specification spec says, "Cycles to pay for the call must be explicitly transferred with the call"
-        //IC management canister will make the HTTP request so it needs cycles
-        //See: https://internetcomputer.org/docs/current/motoko/main/cycles
-        
-        //The way Cycles.add() works is that it adds those cycles to the next asynchronous call
-        //"Function add(amount) indicates the additional amount of cycles to be transferred in the next remote call"
-        //See: https://internetcomputer.org/docs/current/references/ic-interface-spec/#ic-http_request
-        Cycles.add<system>(230_949_972_000);
-        
-        //4. MAKE HTTPS REQUEST AND WAIT FOR RESPONSE
-        //Since the cycles were added above, we can just call the IC management canister with HTTPS outcalls below
-        let http_response : Types.HttpResponsePayload = await ic.http_request(http_request);
-        
-        //5. DECODE THE RESPONSE
-
-        //As per the type declarations in `src/Types.mo`, the BODY in the HTTP response 
-        //comes back as [Nat8s] (e.g. [2, 5, 12, 11, 23]). Type signature:
-        
-        //public type HttpResponsePayload = {
-        //     status : Nat;
-        //     headers : [HttpHeader];
-        //     body : [Nat8];
-        // };
-
-        //We need to decode that [Nat8] array that is the body into readable text. 
-        //To do this, we:
-        //  1. Convert the [Nat8] into a Blob
-        //  2. Use Blob.decodeUtf8() method to convert the Blob to a ?Text optional 
-        //  3. We use a switch to explicitly call out both cases of decoding the Blob into ?Text
-        let response_body: Blob = Blob.fromArray(http_response.body);
-
-        let decoded_text: Text = switch (Text.decodeUtf8(response_body)) {
-            case (null) { "No value returned" };
-            case (?y) { y };
-        };
-
-        //6. RETURN RESPONSE OF THE BODY
-        //The API response will looks like this:
-
-        // ("[[1682978460,5.714,5.718,5.714,5.714,243.5678]]")
-
-        //Which can be formatted as this
-        //  [
-        //     [
-        //         1682978460, <-- start/timestamp
-        //         5.714, <-- low
-        //         5.718, <-- high
-        //         5.714, <-- open
-        //         5.714, <-- close
-        //         243.5678 <-- volume
-        //     ],
-        // ]
-
-        Debug.print("Decoded text: " # decoded_text);
-
-        // Loại bỏ dấu ngoặc vuông ngoài cùng
-        let trimmed_text = Text.trim(decoded_text, #text("[]"));
-        
-        // Tách các giá trị trong mảng
-        let values = Iter.toArray(Text.split(trimmed_text, #text(",")));
-
-        values[4]
     };
 
-    // Các sự kiện được thay thế bằng các hàm ghi log
+    /// @notice Force unlocks all locks (admin only)
+    public shared(msg) func forceUnlock() : async () {
+        assert(msg.caller == OWNER);
+        isDepositLocked := false;
+        isClaimLocked := false;
+    };
+
+    /// @notice Checks the current lock status
+    public query func isLocked() : async {deposit: Bool; claim: Bool} {
+        {
+            deposit = isDepositLocked;
+            claim = isClaimLocked;
+        }
+    };
+
+    // ============ Logging Functions ============
+
     private func logBid(side : Side, account : Principal, value : Nat) {
         Debug.print("Bid: " # debug_show(side) # " " # debug_show(account) # " " # debug_show(value));
     };
@@ -333,6 +333,12 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         Debug.print("Withdrawal: " # debug_show(user) # " " # debug_show(amount));
     };
 
+    // ============ Core Market Functions ============
+
+    /// @notice Places a bid in the market
+    /// @param side The side of the market to bid on (Long or Short)
+    /// @param value The amount to bid
+    /// @return Result indicating success or failure
     public shared(msg) func bid(side : Side, value : Nat) : async Result.Result<Text, Text> {
         assert(currentPhase == #Bidding);
         assert(value > 0);
@@ -366,7 +372,7 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
                 subaccount = null;
             };
             to = {
-                owner = canisterPrincipal;
+                owner = CANISTER_PRINCIPAL;
                 subaccount = null;
             };
             amount = value;
@@ -420,8 +426,9 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         };
     };
 
+    /// @notice Resolves the market using price feed data
     public shared(msg) func resolveMarket() : async () {
-        assert(msg.caller == owner);
+        assert(msg.caller == OWNER);
         assert(currentPhase == #Bidding);
 
         let price = await get_icp_usd_exchange();
@@ -430,16 +437,7 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         resolveWithFulfilledData(finalPrice, Time.now());
     };
 
-    private func resolveWithFulfilledData(rate : Float, timestamp : Int) {
-        let finalPrice = rate;
-        oracleDetails := { strikePrice = oracleDetails.strikePrice; finalPrice = finalPrice };
-
-        resolved := true;
-        currentPhase := #Maturity;
-
-        logMarketResolved(finalPrice, timestamp);
-    };
-
+    /// @notice Claims rewards for winning positions
     public shared(msg) func claimReward() : async () {
         assert(currentPhase == #Expiry);
         assert(resolved);
@@ -466,7 +464,7 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
             assert(userDeposit > 0);
 
             let reward = (userDeposit * totalDeposited) / totalWinningDeposits;
-            let fee = (reward * feePercentage) / 100;
+            let fee = (reward * FEE_PERCENTAGE) / 100;
             let finalReward = if (reward > fee) { reward - fee } else { 0 };
 
             // Mark as claimed before transfer to prevent reentrancy
@@ -532,60 +530,69 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         };
     };
 
+    /// @notice Withdraws funds from the contract (admin only)
     public shared(msg) func withdraw() : async () {
-        assert(msg.caller == owner);
-        let amount = 0; // Cần triển khai cách lấy số dư của canister
+        assert(msg.caller == OWNER);
+        let amount = 0; // Implementation needed: Get canister balance
         assert(amount > 0);
 
-        // Trong Motoko, chúng ta cần triển khai một cách khác để chuyển tiền
-        // Ví dụ: sử dụng ledger canister
+        // Implementation needed: Transfer using ledger canister
         // await transferICP(msg.caller, amount);
 
         logWithdrawal(msg.caller, amount);
     };
 
-    private func requestPriceFeed() : async () {
-        // Cần triển khai cách gọi oracle canister để lấy giá
-    };
-
+    /// @notice Starts the trading phase
     public shared(msg) func startTrading() : async () {
-        assert(owner == msg.caller);
+        assert(OWNER == msg.caller);
         assert(currentPhase == #Trading);
         currentPhase := #Bidding;
     };
 
+    /// @notice Expires the market
     public shared(msg) func expireMarket() : async () {
-        assert(msg.caller == owner);
+        assert(msg.caller == OWNER);
         assert(currentPhase == #Maturity);
         assert(resolved);
         currentPhase := #Expiry;
     };
 
+    /// @notice Changes the strike price (admin only)
     public shared(msg) func changeStrikePrice(newStrikePrice : Float) : async () {
-        assert(msg.caller == owner);
-        oracleDetails := { strikePrice = newStrikePrice; finalPrice = oracleDetails.finalPrice };
+        assert(msg.caller == OWNER);
+        oracleDetails := { 
+            strikePrice = newStrikePrice; 
+            finalPrice = oracleDetails.finalPrice 
+        };
     };
 
-    private func controllerAccountId(controller: Principal) : async AccountIdentifier {
-        Principal.toLedgerAccount(controller, null);
+    // ============ View Functions ============
+
+    public query func getEndTimestamp() : async Nat64 {
+        initEndTimestamp
     };
 
-    /// VIEW FUNCTIONS
-
+    /// @notice Gets the current cycle balance
     public query func getCyclesBalance() : async Nat {
         Debug.print("Main balance: " # debug_show(Cycles.balance()));
         Cycles.balance()
     };
 
+    /// @notice Gets the contract's ICP balance
     public func getContractBalance() : async Nat {
-        let balance = await IcpLedger.icrc1_balance_of({ owner = canisterPrincipal; subaccount = null });
+        let balance = await IcpLedger.icrc1_balance_of({ 
+            owner = CANISTER_PRINCIPAL; 
+            subaccount = null 
+        });
         return balance;
     };
 
+    /// @notice Gets the total amount deposited
     public query func getTotalDeposit() : async Nat {
         totalDeposited
     };
 
+    /// @notice Gets all bidders and their positions
     public query func getBidders() : async {long: [(Principal, Nat)]; short: [(Principal, Nat)]} {
         {
             long = Iter.toArray(longBids.entries());
@@ -593,10 +600,12 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         }
     };
 
+    /// @notice Gets the current market phase
     public query func getCurrentPhase() : async Phase {
         currentPhase
     };
 
+    /// @notice Gets detailed market information
     public query func getMarketDetails() : async {
         oracleDetails: OracleDetails;
         positions: Position;
@@ -609,6 +618,7 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         }
     };
 
+    /// @notice Gets a user's position
     public query func getUserPosition(caller : Principal) : async {long: Nat; short: Nat} {
         {
             long = Option.get(longBids.get(caller), 0);
@@ -616,63 +626,12 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         }
     };
 
+    /// @notice Checks if a user has claimed their rewards
     public query func hasUserClaimed(caller : Principal) : async Bool {
         Option.get(hasClaimed.get(caller), false)
     };
 
-    private func textToNat(txt : Text) : async (Nat) {
-        assert(txt.size() > 0);
-        let chars = txt.chars();
-
-        var num : Nat = 0;
-        for (c in chars) {
-            switch (Char.toNat32(c)) {
-                case (d) {
-                    if (d >= 48 and d <= 57) {
-                        num := num * 10 + Nat32.toNat(d - 48);
-                    } else {
-                        Debug.print("Invalid character in input: " # debug_show(c));
-                        assert(false);
-                    };
-                };
-            };
-        };
-
-        num
-    };
-
-    public func textToFloat(t : Text) : async Float {
-
-        var i : Float = 1;
-        var f : Float = 0;
-        var isDecimal : Bool = false;
-
-        for (c in t.chars()) {
-        if (Char.isDigit(c)) {
-            let charToNat : Nat64 = Nat64.fromNat(Nat32.toNat(Char.toNat32(c) -48));
-            let natToFloat : Float = Float.fromInt64(Int64.fromNat64(charToNat));
-            if (isDecimal) {
-            let n : Float = natToFloat / Float.pow(10, i);
-            f := f + n;
-            } else {
-            f := f * 10 + natToFloat;
-            };
-            i := i + 1;
-        } else {
-            if (Char.equal(c, '.') or Char.equal(c, ',')) {
-            f := f / Float.pow(10, i); // Force decimal
-            f := f * Float.pow(10, i); // Correction
-            isDecimal := true;
-            i := 1;
-            } else {
-            throw Error.reject("NaN");
-            };
-        };
-        };
-
-        return f;
-    };
-
+    /// @notice Gets user balances for both tokens
     public query func getBalances(user: Principal) : async {tokenA: Nat; tokenB: Nat} {
         {
             tokenA = Option.get(balancesA.get(user), 0);
@@ -680,22 +639,70 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         }
     };
 
-    // Add new types for deposit functionality
-    public type DepositArgs = {
-        to : Account;
-        fee : ?Nat;
-        spender_subaccount : ?Blob;
-        from : Account;
-        memo : ?Blob;
-        created_at_time : ?Nat64;
-        amount : Nat;
+    /// @notice Checks license status for a user
+    public shared query ({caller}) func check_license_status() : async Bool {
+        let licenseResult = licenses.get(caller);
+        switch(licenseResult) {
+            case(null) { false };
+            case (? license) { license };
+        };
     };
 
-    public type DepositError = {
-        #TransferFromError : ICRC.TransferFromError;
+    // ============ Internal Functions ============
+
+    /// @notice Resolves market with provided data
+    private func resolveWithFulfilledData(rate : Float, timestamp : Int) {
+        let finalPrice = rate;
+        oracleDetails := { 
+            strikePrice = oracleDetails.strikePrice; 
+            finalPrice = finalPrice 
+        };
+
+        resolved := true;
+        currentPhase := #Maturity;
+
+        logMarketResolved(finalPrice, timestamp);
     };
 
-    // Add deposit function
+    /// @notice Gets controller's account identifier
+    private func controllerAccountId(controller: Principal) : async AccountIdentifier {
+        Principal.toLedgerAccount(controller, null);
+    };
+
+    /// @notice Helper function to manage token balances
+    private func which_balances(t : Principal) : TrieMap.TrieMap<Principal, Nat> {
+        if (t == LEDGER_PRINCIPAL) {
+            balancesA
+        } else {
+            balancesB
+        };
+    };
+
+    /// @notice Handles token transfers
+    private func transfer(args : TransferArgs) : async Result.Result<BlockIndex, Text> {
+        Debug.print(
+            "Transferring "
+            # debug_show (args.amount)
+            # " tokens to principal "
+            # debug_show (args.to)
+            # " subaccount "
+            # debug_show (args.from_subaccount)
+        );
+
+        try {
+            let transferResult = await IcpLedger.icrc1_transfer(args);
+            switch (transferResult) {
+                case (#Err(transferError)) {
+                    return #err("Couldn't transfer funds:\n" # debug_show (transferError));
+                };
+                case (#Ok(blockIndex)) { return #ok blockIndex };
+            };
+        } catch (error) {
+            return #err("Reject message: " # Error.message(error));
+        };
+    };
+
+    /// @notice Handles deposits
     private func deposit(args : DepositArgs) : async Result.Result<Nat, Text> {
         if (not acquireLock("deposit")) {
             return #err("The function is locked");
@@ -703,7 +710,7 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         
         try {
             let token = IcpLedger;
-            let balances = which_balances(ledgerPrincipal);
+            let balances = which_balances(LEDGER_PRINCIPAL);
 
             let transfer_result = await token.icrc2_transfer_from({
                 spender_subaccount = args.spender_subaccount;
@@ -736,53 +743,68 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         };
     };
 
-    // Add withdraw functionality
-    public type WithdrawArgs = {
-        token : Principal;
-        to : ICRC.Account;
-        amount : Nat;
-        fee : ?Nat;
-        memo : ?Blob;
-        created_at_time : ?Nat64;
-    };
+    /// @notice Gets ICP/USD exchange rate
+    private func get_icp_usd_exchange() : async Text {
+        let ic : Types.IC = actor ("aaaaa-aa");
+        let ONE_MINUTE : Nat64 = 60;
+        let start_timestamp : Types.Timestamp = initEndTimestamp - 60;
+        let end_timestamp : Types.Timestamp = initEndTimestamp;
+        let host : Text = "api.exchange.coinbase.com";
+        let url = "https://" # host # "/products/ICP-USD/candles?start=" 
+            # Nat64.toText(start_timestamp) # "&end=" 
+            # Nat64.toText(end_timestamp) # "&granularity=" 
+            # Nat64.toText(ONE_MINUTE);
 
-    public type WithdrawError = {
-        #InsufficientFunds : { balance : ICRC.Tokens };
-        #TransferError : ICRC.TransferError;
-    };
+        Debug.print("Request URL: " # url);
 
-    // Add helper function for balance management
-    private func which_balances(t : Principal) : TrieMap.TrieMap<Principal, Nat> {
-        // You'll need to define your token principals
-        let token_a = ledgerPrincipal; // Replace with actual token principal
-        let token_b = ledgerPrincipal; // Replace with actual token principal
+        let transform_context = {
+            function = transform;
+            context = Blob.fromArray([]);
+        };
+
+        let http_request : Types.HttpRequestArgs = {
+            url = url;
+            max_response_bytes = null;
+            headers = [
+                { name = "Host"; value = ":443" },
+                { name = "User-Agent"; value = "exchange_rate_canister" }
+            ];
+            body = null;
+            method = #get;
+            transform = ?transform_context;
+        };
+
+        Cycles.add<system>(230_949_972_000);
         
-        if (t == token_a) {
-            balancesA
-        } else if (t == token_b) {
-            balancesB
-        } else {
-            Debug.trap("invalid token canister");
-        }
+        let http_response : Types.HttpResponsePayload = await ic.http_request(http_request);
+        let response_body: Blob = Blob.fromArray(http_response.body);
+        let decoded_text: Text = switch (Text.decodeUtf8(response_body)) {
+            case (null) { "No value returned" };
+            case (?y) { y };
+        };
+
+        Debug.print("Decoded text: " # decoded_text);
+        let trimmed_text = Text.trim(decoded_text, #text("[]"));
+        let values = Iter.toArray(Text.split(trimmed_text, #text(",")));
+        values[4]
     };
 
-    // Update system functions to handle new stable storage
+    // ============ System Functions ============
+
     system func preupgrade() {
-        // Existing preupgrade logic
-        
-        // Add new balance storage
         stableBalancesA := ?Iter.toArray(balancesA.entries());
         stableBalancesB := ?Iter.toArray(balancesB.entries());
     };
 
     system func postupgrade() {
-        // Existing postupgrade logic
-        
-        // Add new balance restoration
         switch (stableBalancesA) {
             case (null) {};
             case (?entries) {
-                balancesA := TrieMap.fromEntries<Principal, Nat>(entries.vals(), Principal.equal, Principal.hash);
+                balancesA := TrieMap.fromEntries<Principal, Nat>(
+                    entries.vals(), 
+                    Principal.equal, 
+                    Principal.hash
+                );
                 stableBalancesA := null;
             };
         };
@@ -790,50 +812,13 @@ shared(msg) actor class BinaryOptionMarket(initStrikePrice: Float, initEndTimest
         switch (stableBalancesB) {
             case (null) {};
             case (?entries) {
-                balancesB := TrieMap.fromEntries<Principal, Nat>(entries.vals(), Principal.equal, Principal.hash);
+                balancesB := TrieMap.fromEntries<Principal, Nat>(
+                    entries.vals(), 
+                    Principal.equal, 
+                    Principal.hash
+                );
                 stableBalancesB := null;
             };
         };
-    };
-
-    // Simplified lock variables
-    private var isDepositLocked : Bool = false;
-    private var isClaimLocked : Bool = false;
-
-    // Simplified lock functions
-    private func acquireLock(lockType: Text) : Bool {
-        switch(lockType) {
-            case "deposit" {
-                if (isDepositLocked) return false;
-                isDepositLocked := true;
-            };
-            case "claim" {
-                if (isClaimLocked) return false;
-                isClaimLocked := true;
-            };
-            case _ { return false; };
-        };
-        true
-    };
-
-    private func releaseLock(lockType: Text) {
-        switch(lockType) {
-            case "deposit" { isDepositLocked := false; };
-            case "claim" { isClaimLocked := false; };
-            case _ {};
-        };
-    };
-
-    public shared(msg) func forceUnlock() : async () {
-        assert(msg.caller == owner);
-        isDepositLocked := false;
-        isClaimLocked := false;
-    };
-
-    public query func isLocked() : async {deposit: Bool; claim: Bool} {
-        {
-            deposit = isDepositLocked;
-            claim = isClaimLocked;
-        }
     };
 };

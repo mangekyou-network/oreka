@@ -15,7 +15,7 @@ The Binary Options Market is a proof-of-concept prediction market that leverages
 
 ## Demo 🎮
 
-![Trading Interface](./docs/images/trading-interface.gif)
+![Trading Interface](./docs/images/UI-demo.png)
 ![Price Feed](./docs/images/price-feed.png)
 
 ## Architecture 📐

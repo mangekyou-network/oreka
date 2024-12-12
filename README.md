@@ -20,7 +20,7 @@ The Binary Options Market is a proof-of-concept prediction market that leverages
 - [Demo 1](https://drive.google.com/file/d/1C3wPzyXKbTXys8lZsR3-WREsOCCNbdZB/view?usp=sharing)
 - [Demo 2](https://drive.google.com/file/d/1P47yfKLGNXfwjS3YHDA9k1iZrf9nMMRy/view?usp=sharing)
 
-![Diagram](./docs/images/sequence-diagram.png)
+![Diagram](./docs/images/diagram.png)
 ## Architecture 📐
 
 The project consists of two main components:
@@ -56,14 +56,40 @@ The project consists of two main components:
 1. Start the local replica:
 
 ```bash
+cd oreka/
+
 dfx start --clean
 ```
 
 2. Deploy the Binary Option Market canister with initial arguments:
 
 ```bash
-# need to deploy your icp_ledger_canister first
-dfx deploy binary_option_market
+export MINTER=$(dfx --identity anonymous identity get-principal)
+export DEFAULT=$(dfx identity get-principal)
+
+# deploy icp_ledger_canister dependency first
+dfx deploy icp_ledger_canister --argument "(variant { Init =
+record {
+     token_symbol = \"ICRC1\";
+     token_name = \"L-ICRC1\";
+     minting_account = record { owner = principal \"${MINTER}\" };
+     transfer_fee = 10_000;
+     metadata = vec {};
+     initial_balances = vec { record { record { owner = principal \"${DEFAULT}\"; }; 10_000_000_000; }; };
+     archive_options = record {
+         num_blocks_to_archive = 1000;
+         trigger_threshold = 2000;
+         controller_id = principal \"${MINTER}\";
+     };
+ }
+})"
+
+# deploy binary_option_market
+dfx deploy binary_option_market --argument '(12.0, 1734503362)'
+
+# optional: deploy test canister
+dfx deploy binary_option_market_test
+dfx canister call binary_option_market_test test
 ```
 
 3. Install frontend dependencies:
@@ -76,7 +102,7 @@ cd icp-asset
 npm install --legacy-peer-deps
 ```
 
-4. Start the development server:
+4. Start the frontend development server:
 
 ```bash
 npm run dev

@@ -2,3 +2,5 @@
 base = "0.13.2"
 icrc1 = "0.0.2"
 sha2 = "0.1.0"
+test = "2.0.0"
+motoko-matchers = "https://github.com/kritzcreek/motoko-matchers#master@3dac8a071b69e4e651b25a7d9683fe831eb7cffd"

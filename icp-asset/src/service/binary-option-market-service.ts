@@ -74,6 +74,11 @@ export class BinaryOptionMarketService extends BaseMarketService implements IBin
         return await this.actor.getCurrentPhase();
     }
 
+    public async getEndTimestamp() {
+        this.assertInitialized();
+        return await this.actor.getEndTimestamp();
+    }
+
     public async getMarketDetails() {
         this.assertInitialized();
         return await this.actor.getMarketDetails();

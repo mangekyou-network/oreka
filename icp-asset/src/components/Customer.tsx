@@ -46,6 +46,7 @@ function Customer() {
 
     const [authenticated, setAuthenticated] = useState(false);
 
+    const [endTimestamp, setEndTimestamp] = useState<number | null>(null);
 
     const [availableCoins] = useState<Coin[]>([
         { value: "0x5fbdb2315678afecb367f032d93f642f64180aa3", label: "ICP/USD" },
@@ -60,6 +61,28 @@ function Customer() {
     const [ledgerService, setLedgerService] = useState<IcpLedgerService | null>(null);
     const [shouldCheckRewardClaimability, setShouldCheckRewardClaimability] = useState(false);
     const [identityPrincipal, setIdentityPrincipal] = useState("")
+
+    const formatTimeRemaining = (timestampSec: number): string => {
+        const now = Math.floor(Date.now() / 1000); // Convert current time to seconds
+        const diff = timestampSec - now;
+
+        if (diff <= 0) return "Expired";
+
+        const days = Math.floor(diff / (60 * 60 * 24));
+        const hours = Math.floor((diff % (60 * 60 * 24)) / (60 * 60));
+        const minutes = Math.floor((diff % (60 * 60)) / 60);
+        const seconds = diff % 60;
+
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m`;
+        } else if (hours > 0) {
+            return `${hours}h ${minutes}m ${seconds}s`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${seconds}s`;
+        } else {
+            return `${seconds}s`;
+        }
+    };
 
     // useEffect(() => {
     //     setBalance(balanceEth);
@@ -128,6 +151,12 @@ function Customer() {
 
                 if (currentPhase === Phase.Expiry) {
                     setShouldCheckRewardClaimability(true);
+                }
+
+                const timestamp = await marketService.getEndTimestamp();
+                if (timestamp) {
+                    console.log("timestamp in seconds:", timestamp);
+                    setEndTimestamp(Number(timestamp));  // No need for conversion since it's already in seconds
                 }
             } catch (error: any) {
                 console.error("Error fetching market details:", error);
@@ -343,7 +372,7 @@ function Customer() {
 
                 // setBalance(newBalanceEth);  // Cập nhật lại số dư
                 // setReward(finalReward);  // Reset lại reward sau khi claim
-                // setShowClaimButton(false);  // Ẩn nút claim sau khi đã nhận
+                // setShowClaimButton(false);  // Ẩn n����t claim sau khi đã nhận
 
 
                 setTotalDeposited(0);
@@ -513,6 +542,17 @@ function Customer() {
                                 <VStack spacing={2}>
                                     <Text fontSize="lg">Current Phase: {Phase[currentPhase]}</Text>
                                     <Text fontSize="lg">Total Deposited: {totalDeposited.toFixed(4)} ICP</Text>
+                                    {endTimestamp && (
+                                        <Text
+                                            fontSize="lg"
+                                            color={formatTimeRemaining(endTimestamp) === "Expired" ? "red.500" : "#FEDF56"}
+                                        >
+                                            {formatTimeRemaining(endTimestamp) === "Expired"
+                                                ? "Market Expired"
+                                                : `Expires in: ${formatTimeRemaining(endTimestamp)}`
+                                            }
+                                        </Text>
+                                    )}
                                 </VStack>
 
                                 <VStack spacing={8} width="100%">

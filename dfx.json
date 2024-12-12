@@ -21,8 +21,8 @@
     },
     "icp_ledger_canister": {
       "type": "custom",
-      "candid": "https://raw.githubusercontent.com/dfinity/ic/aba60ffbc46acfc8990bf4d5685c1360bd7026b9/rs/ledger_suite/icp/ledger.did",
-      "wasm": "https://download.dfinity.systems/ic/aba60ffbc46acfc8990bf4d5685c1360bd7026b9/canisters/ledger-canister.wasm.gz",
+      "candid": "https://raw.githubusercontent.com/dfinity/ic/d87954601e4b22972899e9957e800406a0a6b929/rs/rosetta-api/icrc1/ledger/ledger.did",
+      "wasm": "https://download.dfinity.systems/ic/d87954601e4b22972899e9957e800406a0a6b929/canisters/ic-icrc1-ledger.wasm.gz",
       "remote": {
         "id": {
           "ic": "ryjl3-tyaaa-aaaaa-aaaba-cai"
@@ -96,6 +96,13 @@
         }
       },
       "specified_id": "uf6dk-hyaaa-aaaaq-qaaaq-cai"
+    },
+    "binary_option_market_test": {
+      "main": "canisters/binary_option_market/test/main.test.mo",
+      "type": "motoko",
+      "dependencies": [
+        "binary_option_market"
+      ]
     }
   },
   "defaults": {
