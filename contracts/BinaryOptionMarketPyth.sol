@@ -89,8 +89,6 @@ contract BinaryOptionMarket is Ownable {
     uint256 public stakingTimestamp;
     uint256 public constant COOLDOWN_DURATION = 1 hours;
 
-    // The problem may lie in the oracle. It should be deployed on Sepolia
-    // FUCK!
     constructor(
         address _owner,
         address _pythContract,
@@ -196,17 +194,16 @@ contract BinaryOptionMarket is Ownable {
             userDeposit = longBids[msg.sender];
             totalWinningDeposits = positions.long;
             if (userDeposit > 0) {
-                isWinner = true; // Người dùng thắng
+                isWinner = true;
             }
         } else {
             userDeposit = shortBids[msg.sender];
             totalWinningDeposits = positions.short;
             if (userDeposit > 0) {
-                isWinner = true; // Người dùng thắng
+                isWinner = true;
             }
         }
 
-        // Gửi sự kiện kết quả thắng/thua
         emit MarketOutcome(winningSide, msg.sender, isWinner);
 
         require(userDeposit > 0, "No deposits on winning side");
@@ -234,16 +231,6 @@ contract BinaryOptionMarket is Ownable {
         );
         emit Withdrawal(msg.sender, amount);
     }
-
-    // question how should we call this frequently?
-    // answer we're going to call it from the resolveMarket - NAIVE method
-    // function requestPriceFeed() internal {
-    //     // Requesting the ICP/USD price feed with a specified callback gas limit
-    //     uint256 requestId = apolloCoordinator.requestDataFeed(
-    //         "ICP/USD",
-    //         300000
-    //     );
-    // }
 
     function startTrading() external onlyOwner {
         require(currentPhase == Phase.Starting, "Market not in starting phase");
